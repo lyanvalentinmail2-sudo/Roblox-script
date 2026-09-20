@@ -27,8 +27,10 @@ try {
   await state.loadstring(standaloneTest, 'Standalone tests', true)();
   const hubModules = modules
     + `local Favorites = (function()\n${await read('src/ReplicatedStorage/FEEmotes/Favorites.lua')}\nend)()\n`
-    + `local HubState = (function()\n${await read('src/ReplicatedStorage/FEEmotes/HubState.lua')}\nend)()\n`;
+    + `local HubState = (function()\n${await read('src/ReplicatedStorage/FEEmotes/HubState.lua')}\nend)()\n`
+    + `local HubLayout = (function()\n${await read('src/ReplicatedStorage/FEEmotes/HubLayout.lua')}\nend)()\n`;
   await state.loadstring(hubModules + await read('tests/hub.spec.luau'), 'Hub modules', true)();
+  await state.loadstring(hubModules + await read('tests/layout.spec.luau'), 'Compact layout', true)();
   const detailsModule = `\nlocal EmoteDetails = (function()\n${await read('src/ReplicatedStorage/FEEmotes/EmoteDetails.lua')}\nend)()\n`;
   const detailsTest = modules + await read('tests/server.fixture.luau') + detailsModule
     + await read('tests/details.fixture.luau') + '\n' + await read('tests/details.spec.luau');

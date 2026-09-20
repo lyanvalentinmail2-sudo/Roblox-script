@@ -91,3 +91,15 @@ En Device Emulator, probar 360×640, 390×844, tablet y teléfono en horizontal;
 - [ ] Fallo de PromptPurchase o restricciones de venta: error claro, sin reintentos de compra automáticos.
 - [ ] Girar la pantalla: acceso sigue en un lateral, preview cuadrado y ambos botones de la ficha accesibles.
 - [ ] Ejecutar dos veces vuelve a mostrar solo FE y mantiene los favoritos de la sesión.
+
+## Glass Compact (verificación en teléfono pendiente)
+
+- [ ] Ventana no supera 400 × 560; mantiene márgenes en 320×568, 360×640 y 390×844.
+- [ ] Catálogo, Equipados y Favoritos usan 3 columnas en teléfono y 4 con suficiente ancho; no aparecen filas cortadas al girar la pantalla.
+- [ ] Probar una colección de 120 emotes y una cantidad no múltiplo de 3/4: última fila y scroll correctos.
+- [ ] ★ está arriba en un botón cuadrado; pulsarlo abre Favoritos y lo pinta amarillo. Salir a Catálogo/Equipados restaura el tono neutro.
+- [ ] Hover, pulsaciones repetidas y colección vacía no borran por error el amarillo de la sección seleccionada.
+- [ ] Estrellas de tarjetas guardadas son doradas; marcar una no cambia la sección seleccionada ni abre la ficha.
+- [ ] Tarjetas pequeñas: + y ☆ se pueden tocar por separado sin reproducir, abrir fichas ni comprar accidentalmente.
+- [ ] Verificar legibilidad del vidrio sobre mapas claros, oscuros y fondos en movimiento en un dispositivo real.
+- [ ] La ficha compacta sigue mostrando nombre, creador y estado de compra con sus dos botones accesibles.

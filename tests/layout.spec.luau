@@ -1,0 +1,33 @@
+local count = 0
+local function check(condition, message)
+	assert(condition, message)
+	count = count + 1
+end
+local w, h = HubLayout.window(1920, 1080)
+check(w == 400 and h == 560, "límite compacto de escritorio")
+w, h = HubLayout.window(390, 844)
+check(w == 366 and h == 560, "márgenes de teléfono")
+w, h = HubLayout.window(320, 568)
+check(w == 296 and h == 544, "teléfono pequeño sin salirse de pantalla")
+w, h = HubLayout.window(740, 320)
+check(w == 400 and h == 296, "horizontal conserva márgenes")
+w, h = HubLayout.window(1, 1)
+check(w > 0 and h > 0, "geometría positiva durante inicialización")
+local columns, side, height = HubLayout.grid(346, 7)
+check(columns == 3 and side == 111 and height == 345, "tres columnas y tres filas parciales")
+columns, side, height = HubLayout.grid(380, 9)
+check(columns == 4 and side == 90 and height == 282, "cuatro columnas en ventana ancha")
+columns, side, height = HubLayout.grid(276, 120)
+check(columns == 3 and side == 88 and height == 3754, "colección completa en móvil pequeño")
+columns, side, height = HubLayout.grid(240, 5)
+check(columns == 2 and side == 117 and height == 363, "respaldo de dos columnas en ancho extremo")
+columns, side, height = HubLayout.grid(100, 2)
+check(columns == 1 and side == 100 and height == 206, "respaldo de una columna")
+for _, width in ipairs({ 170, 257, 258, 300, 359, 360, 380, 500 }) do
+	columns, side, height = HubLayout.grid(width, 120)
+	check(columns * side + (columns - 1) * HubLayout.Gap <= width, "la cuadrícula no desborda")
+	check(side >= 82, "miniaturas legibles en los anchos previstos")
+	local _, _, emptyHeight = HubLayout.grid(width, 0)
+	check(emptyHeight == 0, "colección vacía sin altura residual")
+end
+print("Layout compacto: " .. count .. " comprobaciones correctas")

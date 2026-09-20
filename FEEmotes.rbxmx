@@ -375,13 +375,40 @@ return EmoteDetails
 </ProtectedString>
           </Properties>
         </Item>
+        <Item class="ModuleScript" referent="RBX9">
+          <Properties>
+            <string name="Name">HubLayout</string>
+            <ProtectedString name="Source">-- Geometría compartida y comprobable sin el motor: ventanas pequeñas, tarjetas 1:1.
+local HubLayout = {
+	MaxWidth = 400,
+	MaxHeight = 560,
+	Margin = 12,
+	Gap = 6,
+}
+
+function HubLayout.window(width, height)
+	return math.max(1, math.min(HubLayout.MaxWidth, width - HubLayout.Margin * 2)),
+		math.max(1, math.min(HubLayout.MaxHeight, height - HubLayout.Margin * 2))
+end
+
+function HubLayout.grid(width, count)
+	local columns = width &gt;= 360 and 4 or (width &gt;= 258 and 3 or (width &gt;= 170 and 2 or 1))
+	local side = math.max(1, math.floor((width - HubLayout.Gap * (columns - 1)) / columns))
+	local rows = math.ceil(math.max(0, count) / columns)
+	return columns, side, math.max(0, rows * (side + HubLayout.Gap) - HubLayout.Gap)
+end
+
+return HubLayout
+</ProtectedString>
+          </Properties>
+        </Item>
       </Item>
     </Item>
-    <Item class="Folder" referent="RBX9">
+    <Item class="Folder" referent="RBX10">
       <Properties>
         <string name="Name">ServerScriptService</string>
       </Properties>
-      <Item class="Script" referent="RBX10">
+      <Item class="Script" referent="RBX11">
         <Properties>
           <string name="Name">FEEmotes</string>
           <ProtectedString name="Source">-- FE Emotes • servidor autoritativo. No requiere HTTP, loadstring ni ejecutores.
@@ -774,18 +801,18 @@ end
         </Properties>
       </Item>
     </Item>
-    <Item class="Folder" referent="RBX11">
+    <Item class="Folder" referent="RBX12">
       <Properties>
         <string name="Name">StarterPlayer</string>
       </Properties>
-      <Item class="Folder" referent="RBX12">
+      <Item class="Folder" referent="RBX13">
         <Properties>
           <string name="Name">StarterPlayerScripts</string>
         </Properties>
-        <Item class="LocalScript" referent="RBX13">
+        <Item class="LocalScript" referent="RBX14">
           <Properties>
             <string name="Name">FEEmotes</string>
-            <ProtectedString name="Source">-- FE Emotes / GLASS • catálogo cuadrado, ficha de emote y acceso lateral.
+            <ProtectedString name="Source">-- FE Emotes / GLASS COMPACT • biblioteca densa, cristal translúcido y favoritos dorados.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local AvatarEditorService = game:GetService("AvatarEditorService")
@@ -808,6 +835,7 @@ local Config = require(shared:WaitForChild("Config"))
 local Validation = require(shared:WaitForChild("Validation"))
 local Favorites = require(shared:WaitForChild("Favorites"))
 local HubState = require(shared:WaitForChild("HubState"))
+local HubLayout = require(shared:WaitForChild("HubLayout"))
 local EmoteDetails = require(shared:WaitForChild("EmoteDetails"))
 local remote = shared:WaitForChild("Request", 15)
 if not remote then
@@ -821,7 +849,8 @@ local C = {
 	elevated = Color3.fromRGB(26, 26, 29),
 	stroke = Color3.fromRGB(60, 60, 65),
 	text = Color3.fromRGB(245, 245, 247),
-	muted = Color3.fromRGB(158, 158, 167),
+	muted = Color3.fromRGB(184, 188, 198),
+	favorite = Color3.fromRGB(255, 211, 84),
 	accent = Color3.fromRGB(237, 237, 241),
 	selected = Color3.fromRGB(226, 226, 231),
 	error = Color3.fromRGB(255, 164, 174),
@@ -873,6 +902,8 @@ local function text(parent, value, size, color, props)
 		Text = value,
 		TextSize = size or 14,
 		TextColor3 = color or C.text,
+		TextStrokeColor3 = C.background,
+		TextStrokeTransparency = 0.82,
 		Font = Enum.Font.GothamMedium,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -887,20 +918,20 @@ end
 local function button(parent, value, props)
 	local options = {
 		BackgroundColor3 = C.elevated,
-		BackgroundTransparency = 0.16,
+		BackgroundTransparency = 0.42,
 		BorderSizePixel = 0,
 		Text = value,
 		TextColor3 = C.text,
 		TextSize = 14,
 		Font = Enum.Font.GothamMedium,
 		AutoButtonColor = false,
-		Size = UDim2.fromOffset(44, 44),
+		Size = UDim2.fromOffset(36, 36),
 	}
 	for key, override in pairs(props or {}) do
 		options[key] = override
 	end
 	local object = make("TextButton", options, parent)
-	rounded(object, 12)
+	rounded(object, 10)
 	if options.Name ~= "SpeedSlider" and options.Name ~= "EmoteDetailsOverlay" then
 		local scale = make("UIScale", { Scale = 1 }, object)
 		-- Conexiones propiedad del botón: Destroy las libera junto con la tarjeta.
@@ -944,26 +975,26 @@ local panel = make("CanvasGroup", {
 	Name = "Panel",
 	Visible = false,
 	GroupTransparency = 1,
-	BackgroundTransparency = 0.28,
+	BackgroundTransparency = 0.58,
 	BackgroundColor3 = C.background,
 	BorderSizePixel = 0,
-	Size = UDim2.fromOffset(440, 740),
+	Size = UDim2.fromOffset(HubLayout.MaxWidth, HubLayout.MaxHeight),
 	ClipsDescendants = true,
 }, safe)
 local panelScale = make("UIScale", { Scale = 1 }, panel)
-rounded(panel, 22)
+rounded(panel, 18)
 local glassBorder = stroke(panel, C.accent)
-glassBorder.Transparency = 0.7
+glassBorder.Transparency = 0.52
 -- Cristal simulado con transparencias, reflejos y bordes; no se altera Lighting.
 local sheen = make("Frame", {
 	Name = "GlassSheen",
 	BackgroundColor3 = C.text,
-	BackgroundTransparency = 0.9,
+	BackgroundTransparency = 0.91,
 	Size = UDim2.fromScale(1, 1),
 	BorderSizePixel = 0,
 	Active = false,
 }, panel)
-rounded(sheen, 22)
+rounded(sheen, 18)
 make("UIGradient", {
 	Rotation = 115,
 	Transparency = NumberSequence.new({
@@ -976,55 +1007,62 @@ local accent = make("Frame", {
 	BackgroundColor3 = C.accent,
 	BorderSizePixel = 0,
 	Size = UDim2.new(1, 0, 0, 1),
+	BackgroundTransparency = 0.35,
 }, panel)
 make("UIGradient", { Color = ColorSequence.new(C.stroke, C.accent) }, accent)
 local header = make("Frame", {
 	Name = "DragHandle",
 	Active = true,
 	BackgroundTransparency = 1,
-	Position = UDim2.fromOffset(16, 9),
-	Size = UDim2.new(1, -128, 0, 54),
+	Position = UDim2.fromOffset(12, 8),
+	Size = UDim2.new(1, -142, 0, 40),
 }, panel)
-text(header, "FE", 23, C.accent, { Size = UDim2.fromOffset(36, 28), Font = Enum.Font.GothamBold })
+text(header, "FE", 18, C.accent, { Size = UDim2.fromOffset(25, 22), Font = Enum.Font.GothamBold })
 text(
 	header,
 	"EMOTES",
-	21,
+	16,
 	C.text,
-	{ Position = UDim2.fromOffset(40, 0), Size = UDim2.new(1, -40, 0, 28), Font = Enum.Font.GothamBold }
+	{ Position = UDim2.fromOffset(28, 0), Size = UDim2.new(1, -28, 0, 22), Font = Enum.Font.GothamBold }
 )
 text(
 	header,
-	"GLASS EDITION  /  TU AVATAR",
-	10,
+	"GLASS COMPACT  /  TU AVATAR",
+	8,
 	C.muted,
-	{ Position = UDim2.fromOffset(0, 31), Size = UDim2.new(1, 0, 0, 16) }
+	{ Position = UDim2.fromOffset(0, 24), Size = UDim2.new(1, 0, 0, 12) }
 )
-local minimize = button(panel, "−", { TextSize = 24, Position = UDim2.new(1, -104, 0, 11) })
-local close = button(panel, "×", { TextSize = 24, Position = UDim2.new(1, -54, 0, 11) })
+local favoritesNav = button(panel, "★", {
+	Name = "Favoritos",
+	Position = UDim2.new(1, -124, 0, 10),
+	TextSize = 23,
+})
+local favoritesBorder = stroke(favoritesNav, C.stroke)
+local minimize = button(panel, "−", { TextSize = 21, Position = UDim2.new(1, -84, 0, 10) })
+local close = button(panel, "×", { TextSize = 21, Position = UDim2.new(1, -44, 0, 10) })
 
 local navigation = make("Frame", {
 	Name = "LibraryNavigation",
-	BackgroundTransparency = 0.24,
-	Position = UDim2.fromOffset(14, 68),
-	Size = UDim2.new(1, -28, 0, 48),
+	BackgroundTransparency = 0.6,
+	Position = UDim2.fromOffset(10, 56),
+	Size = UDim2.new(1, -20, 0, 34),
 	BackgroundColor3 = C.surface,
 	BorderSizePixel = 0,
 }, panel)
-rounded(navigation, 14)
+rounded(navigation, 10)
 local navIndicator = make("Frame", {
 	Position = UDim2.fromOffset(4, 4),
-	Size = UDim2.new(1 / 3, -8, 1, -8),
+	Size = UDim2.new(0.5, -8, 1, -8),
 	BackgroundColor3 = C.selected,
 	BorderSizePixel = 0,
 }, navigation)
-rounded(navIndicator, 10)
-local viewButtons = {}
-for i, name in ipairs({ "Catálogo", "Favoritos", "Equipados" }) do
+rounded(navIndicator, 7)
+local viewButtons = { Favoritos = favoritesNav }
+for i, name in ipairs({ "Catálogo", "Equipados" }) do
 	viewButtons[name] = button(navigation, name, {
 		Name = name,
-		Position = UDim2.new((i - 1) / 3, 0, 0, 0),
-		Size = UDim2.new(1 / 3, 0, 1, 0),
+		Position = UDim2.new((i - 1) / 2, 0, 0, 0),
+		Size = UDim2.new(0.5, 0, 1, 0),
 		BackgroundTransparency = 1,
 		TextSize = 12,
 		TextColor3 = i == 1 and C.background or C.muted,
@@ -1032,8 +1070,8 @@ for i, name in ipairs({ "Catálogo", "Favoritos", "Equipados" }) do
 end
 local pageSurface = make("CanvasGroup", {
 	Name = "LibraryPage",
-	Position = UDim2.fromOffset(14, 128),
-	Size = UDim2.new(1, -28, 1, -172),
+	Position = UDim2.fromOffset(10, 98),
+	Size = UDim2.new(1, -20, 1, -132),
 	BackgroundTransparency = 1,
 	BorderSizePixel = 0,
 }, panel)
@@ -1051,7 +1089,7 @@ local body = make("ScrollingFrame", {
 	ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
 }, pageSurface)
 make("UIPadding", { PaddingRight = UDim.new(0, 5), PaddingBottom = UDim.new(0, 8) }, body)
-make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10) }, body)
+make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }, body)
 local order = 0
 local function section(height, surface)
 	order = order + 1
@@ -1060,7 +1098,7 @@ local function section(height, surface)
 		LayoutOrder = order,
 		BorderSizePixel = 0,
 		BackgroundColor3 = C.surface,
-		BackgroundTransparency = surface and 0.24 or 1,
+		BackgroundTransparency = surface and 0.56 or 1,
 	}, body)
 	if surface then
 		rounded(frame)
@@ -1068,37 +1106,37 @@ local function section(height, surface)
 	return frame
 end
 
-local now = section(72, true)
+local now = section(54, true)
 stroke(now)
 local activeImage = make("ImageLabel", {
 	BackgroundColor3 = C.elevated,
 	BorderSizePixel = 0,
-	Size = UDim2.fromOffset(48, 48),
-	Position = UDim2.fromOffset(10, 12),
+	Size = UDim2.fromOffset(36, 36),
+	Position = UDim2.fromOffset(8, 9),
 	Image = "",
 	ScaleType = Enum.ScaleType.Fit,
 }, now)
 rounded(activeImage, 10)
-local activeName = text(now, "Elige tu próximo emote", 14, C.text, {
-	Position = UDim2.fromOffset(68, 13),
-	Size = UDim2.new(1, -180, 0, 22),
+local activeName = text(now, "Elige un emote", 12, C.text, {
+	Position = UDim2.fromOffset(52, 7),
+	Size = UDim2.new(1, -146, 0, 20),
 })
-local activeState = text(now, "UGC + clásicos de Roblox", 11, C.muted, {
-	Position = UDim2.fromOffset(68, 37),
-	Size = UDim2.new(1, -180, 0, 18),
+local activeState = text(now, "UGC + Roblox", 10, C.muted, {
+	Position = UDim2.fromOffset(52, 30),
+	Size = UDim2.new(1, -146, 0, 16),
 })
 local stopButton =
-	button(now, "■", { Position = UDim2.new(1, -54, 0, 14), TextColor3 = C.error, TextSize = 21 })
+	button(now, "■", { Position = UDim2.new(1, -44, 0, 9), TextColor3 = C.error, TextSize = 18 })
 
 local controlsToggle =
-	button(now, "≡", { Name = "PlayerControls", Position = UDim2.new(1, -104, 0, 14), TextSize = 24 })
+	button(now, "≡", { Name = "PlayerControls", Position = UDim2.new(1, -84, 0, 9), TextSize = 21 })
 local controlsGroup = section(0, false)
 controlsGroup.Name = "ExpandedPlayer"
 controlsGroup.ClipsDescendants = true
 controlsGroup.Visible = false
 local controlsOpen = false
 local controlsRevision = 0
-local speedSection = section(66, false)
+local speedSection = section(54, false)
 speedSection.Parent = controlsGroup
 text(speedSection, "VELOCIDAD", 10, C.muted, { Size = UDim2.new(0.5, 0, 0, 18) })
 local speedValue = text(speedSection, "1.00×", 13, C.accent, {
@@ -1106,12 +1144,12 @@ local speedValue = text(speedSection, "1.00×", 13, C.accent, {
 	Size = UDim2.new(0.5, 0, 0, 18),
 	TextXAlignment = Enum.TextXAlignment.Right,
 })
-local minus = button(speedSection, "−", { Position = UDim2.fromOffset(0, 22), TextSize = 22 })
-local plus = button(speedSection, "+", { Position = UDim2.new(1, -44, 0, 22), TextSize = 22 })
+local minus = button(speedSection, "−", { Position = UDim2.fromOffset(0, 18), TextSize = 20 })
+local plus = button(speedSection, "+", { Position = UDim2.new(1, -36, 0, 18), TextSize = 20 })
 local slider = button(speedSection, "", {
 	Name = "SpeedSlider",
-	Position = UDim2.fromOffset(54, 22),
-	Size = UDim2.new(1, -108, 0, 44),
+	Position = UDim2.fromOffset(46, 18),
+	Size = UDim2.new(1, -92, 0, 36),
 	BackgroundTransparency = 1,
 })
 local rail = make("Frame", {
@@ -1132,9 +1170,9 @@ local knob = make("Frame", {
 	Size = UDim2.fromOffset(20, 20),
 }, rail)
 rounded(knob, 10)
-local switches = section(52, false)
+local switches = section(46, false)
 switches.Parent = controlsGroup
-switches.Position = UDim2.fromOffset(0, 76)
+switches.Position = UDim2.fromOffset(0, 60)
 local lockButton = button(switches, "", { Size = UDim2.new(0.5, -4, 1, 0) })
 local pauseButton =
 	button(switches, "", { Position = UDim2.new(0.5, 4, 0, 0), Size = UDim2.new(0.5, -4, 1, 0) })
@@ -1143,35 +1181,35 @@ local lockTitle = text(
 	"○ Mantener",
 	13,
 	C.text,
-	{ Position = UDim2.fromOffset(10, 6), Size = UDim2.new(1, -20, 0, 20) }
+	{ Position = UDim2.fromOffset(8, 4), Size = UDim2.new(1, -16, 0, 18) }
 )
 text(
 	lockButton,
 	"No se quita al moverte",
 	10,
 	C.muted,
-	{ Position = UDim2.fromOffset(10, 29), Size = UDim2.new(1, -20, 0, 16) }
+	{ Position = UDim2.fromOffset(8, 25), Size = UDim2.new(1, -16, 0, 14) }
 )
 local pauseTitle = text(
 	pauseButton,
 	"Ⅱ Pausar pose",
 	13,
 	C.text,
-	{ Position = UDim2.fromOffset(10, 6), Size = UDim2.new(1, -20, 0, 20) }
+	{ Position = UDim2.fromOffset(8, 4), Size = UDim2.new(1, -16, 0, 18) }
 )
 text(
 	pauseButton,
 	"Congela el fotograma",
 	10,
 	C.muted,
-	{ Position = UDim2.fromOffset(10, 29), Size = UDim2.new(1, -20, 0, 16) }
+	{ Position = UDim2.fromOffset(8, 25), Size = UDim2.new(1, -16, 0, 14) }
 )
 
-local quick = section(80, false)
+local quick = section(60, false)
 local quickTitle = text(quick, "ACCESO RÁPIDO · 0/8", 10, C.muted, { Size = UDim2.new(1, 0, 0, 18) })
 local quickScroll = make("ScrollingFrame", {
-	Position = UDim2.fromOffset(0, 24),
-	Size = UDim2.new(1, 0, 0, 56),
+	Position = UDim2.fromOffset(0, 20),
+	Size = UDim2.new(1, 0, 0, 40),
 	BackgroundTransparency = 1,
 	BorderSizePixel = 0,
 	CanvasSize = UDim2.new(),
@@ -1182,30 +1220,31 @@ local quickScroll = make("ScrollingFrame", {
 }, quick)
 make("UIListLayout", {
 	FillDirection = Enum.FillDirection.Horizontal,
-	Padding = UDim.new(0, 8),
+	Padding = UDim.new(0, 6),
 	SortOrder = Enum.SortOrder.LayoutOrder,
 }, quickScroll)
 
-local browseTitle = section(66, false)
-local collectionEyebrow = text(browseTitle, "LA BIBLIOTECA", 10, C.muted, { Size = UDim2.new(1, -54, 0, 16) })
-local collectionTitle = text(browseTitle, "Encuentra tu ritmo.", 19, C.text, {
-	Position = UDim2.fromOffset(0, 20),
-	Size = UDim2.new(1, -50, 0, 25),
+local browseTitle = section(46, false)
+local collectionEyebrow = text(browseTitle, "LA BIBLIOTECA", 8, C.muted, { Size = UDim2.new(1, -44, 0, 12) })
+local collectionTitle = text(browseTitle, "Encuentra tu ritmo.", 16, C.text, {
+	Position = UDim2.fromOffset(0, 12),
+	Size = UDim2.new(1, -44, 0, 21),
 	Font = Enum.Font.GothamBold,
 })
-local collectionHint = text(browseTitle, "Toca un emote para desplegarlo o comprarlo.", 11, C.muted, {
-	Position = UDim2.fromOffset(0, 48),
-	Size = UDim2.new(1, 0, 0, 16),
+local collectionHint = text(browseTitle, "Toca un emote para desplegarlo o comprarlo.", 9, C.muted, {
+	Position = UDim2.fromOffset(0, 34),
+	Size = UDim2.new(1, 0, 0, 12),
 })
-local collectionCount = text(browseTitle, "06", 22, C.accent, {
-	Position = UDim2.new(1, -48, 0, 18),
-	Size = UDim2.fromOffset(48, 28),
+local collectionCount = text(browseTitle, "06", 18, C.accent, {
+	Position = UDim2.new(1, -40, 0, 12),
+	Size = UDim2.fromOffset(40, 22),
 	TextXAlignment = Enum.TextXAlignment.Right,
 })
-local searchSection = section(48, false)
+local searchSection = section(36, false)
 local searchBox = make("TextBox", {
 	Name = "Search",
-	Size = UDim2.new(1, -58, 1, 0),
+	Size = UDim2.new(1, -48, 1, 0),
+	BackgroundTransparency = 0.48,
 	BackgroundColor3 = C.surface,
 	BorderSizePixel = 0,
 	Text = "",
@@ -1221,12 +1260,13 @@ rounded(searchBox)
 stroke(searchBox)
 make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 10) }, searchBox)
 local searchButton = button(searchSection, "Ir →", {
-	Position = UDim2.new(1, -50, 0, 0),
-	Size = UDim2.fromOffset(50, 48),
+	Position = UDim2.new(1, -42, 0, 0),
+	Size = UDim2.fromOffset(42, 36),
+	TextSize = 12,
 	BackgroundColor3 = C.selected,
 	TextColor3 = C.background,
 })
-local tabsSection = section(44, false)
+local tabsSection = section(30, false)
 make("UIListLayout", {
 	FillDirection = Enum.FillDirection.Horizontal,
 	Padding = UDim.new(0, 6),
@@ -1235,18 +1275,18 @@ make("UIListLayout", {
 local tabs = {}
 for i, name in ipairs({ "Todos", "UGC", "Roblox" }) do
 	tabs[name] =
-		button(tabsSection, name, { Size = UDim2.new(1 / 3, -4, 1, 0), TextSize = 12, LayoutOrder = i })
+		button(tabsSection, name, { Size = UDim2.new(1 / 3, -4, 1, 0), TextSize = 11, LayoutOrder = i })
 end
 local grid = section(0, false)
 grid.Name = "EmoteGrid"
 local gridLayout = make("UIGridLayout", {
 	Name = "SquareLayout",
-	FillDirectionMaxCells = 2,
-	CellSize = UDim2.fromOffset(150, 150),
-	CellPadding = UDim2.fromOffset(10, 10),
+	FillDirectionMaxCells = 3,
+	CellSize = UDim2.fromOffset(96, 96),
+	CellPadding = UDim2.fromOffset(HubLayout.Gap, HubLayout.Gap),
 	SortOrder = Enum.SortOrder.LayoutOrder,
 }, grid)
-local empty = section(116, true)
+local empty = section(92, true)
 stroke(empty)
 local emptyText = text(
 	empty,
@@ -1256,9 +1296,9 @@ local emptyText = text(
 	{ TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center }
 )
 empty.Visible = false
-local moreSection = section(44, false)
+local moreSection = section(36, false)
 local more = button(moreSection, "Buscar en el catálogo de Roblox", { Size = UDim2.fromScale(1, 1) })
-local note = section(32, false)
+local note = section(26, false)
 text(
 	note,
 	"Equipar no compra el artículo. Disponibilidad según Roblox.",
@@ -1267,9 +1307,9 @@ text(
 	{ TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center }
 )
 
-local status = text(panel, "Listo · R15 recomendado", 11, C.muted, {
-	Position = UDim2.new(0, 16, 1, -40),
-	Size = UDim2.new(1, -32, 0, 34),
+local status = text(panel, "Listo · R15 recomendado", 10, C.muted, {
+	Position = UDim2.new(0, 12, 1, -30),
+	Size = UDim2.new(1, -24, 0, 26),
 	TextWrapped = true,
 })
 local detailUI = { revision = 0 }
@@ -1286,9 +1326,9 @@ detailUI.card = make("CanvasGroup", {
 	Active = true,
 	AnchorPoint = Vector2.new(0.5, 0.5),
 	Position = UDim2.fromScale(0.5, 0.5),
-	Size = UDim2.fromOffset(380, 430),
+	Size = UDim2.fromOffset(344, 368),
 	BackgroundColor3 = C.surface,
-	BackgroundTransparency = 0.08,
+	BackgroundTransparency = 0.28,
 	BorderSizePixel = 0,
 	GroupTransparency = 1,
 	ClipsDescendants = true,
@@ -1296,16 +1336,16 @@ detailUI.card = make("CanvasGroup", {
 rounded(detailUI.card, 18)
 stroke(detailUI.card, C.accent).Transparency = 0.7
 detailUI.scale = make("UIScale", { Scale = 1 }, detailUI.card)
-text(detailUI.card, "EMOTE SELECCIONADO", 11, C.muted, {
-	Position = UDim2.fromOffset(16, 12),
-	Size = UDim2.new(1, -76, 0, 32),
+text(detailUI.card, "EMOTE SELECCIONADO", 10, C.muted, {
+	Position = UDim2.fromOffset(12, 8),
+	Size = UDim2.new(1, -62, 0, 28),
 })
 detailUI.close =
-	button(detailUI.card, "×", { Name = "CloseDetails", Position = UDim2.new(1, -54, 0, 6), TextSize = 24 })
+	button(detailUI.card, "×", { Name = "CloseDetails", Position = UDim2.new(1, -44, 0, 4), TextSize = 21 })
 detailUI.body = make("ScrollingFrame", {
 	Name = "DetailsContent",
-	Position = UDim2.fromOffset(14, 58),
-	Size = UDim2.new(1, -28, 1, -130),
+	Position = UDim2.fromOffset(12, 48),
+	Size = UDim2.new(1, -24, 1, -112),
 	BackgroundTransparency = 1,
 	BorderSizePixel = 0,
 	CanvasSize = UDim2.new(),
@@ -1320,7 +1360,7 @@ detailUI.preview = make("Frame", {
 	Name = "BlackEmoteSquare",
 	BackgroundColor3 = Color3.fromRGB(0, 0, 0),
 	BorderSizePixel = 0,
-	Size = UDim2.fromOffset(188, 188),
+	Size = UDim2.fromOffset(144, 144),
 	Position = UDim2.new(0.5, 0, 0, 0),
 	AnchorPoint = Vector2.new(0.5, 0),
 }, detailUI.content)
@@ -1358,15 +1398,17 @@ detailUI.message = text(
 )
 detailUI.deploy = button(detailUI.card, "Desplegar", {
 	Name = "DeployEmote",
-	Position = UDim2.new(0, 14, 1, -62),
-	Size = UDim2.new(0.5, -19, 0, 48),
+	Position = UDim2.new(0, 12, 1, -52),
+	Size = UDim2.new(0.5, -17, 0, 40),
+	TextSize = 12,
 	BackgroundColor3 = C.selected,
 	TextColor3 = C.background,
 })
 detailUI.buy = button(detailUI.card, "Comprar", {
 	Name = "BuyEmote",
-	Position = UDim2.new(0.5, 5, 1, -62),
-	Size = UDim2.new(0.5, -19, 0, 48),
+	Position = UDim2.new(0.5, 5, 1, -52),
+	Size = UDim2.new(0.5, -17, 0, 40),
+	TextSize = 12,
 	BackgroundColor3 = Color3.fromRGB(0, 0, 0),
 })
 stroke(detailUI.buy)
@@ -1605,9 +1647,10 @@ local function saveFavorites()
 end
 local renderCards
 local function updateGridSize()
-	local side = math.max(1, math.floor((grid.AbsoluteSize.X - 10) / 2))
+	local columns, side, height = HubLayout.grid(grid.AbsoluteSize.X, #cards)
+	gridLayout.FillDirectionMaxCells = columns
 	gridLayout.CellSize = UDim2.fromOffset(side, side)
-	grid.Size = UDim2.new(1, 0, 0, math.max(0, math.ceil(#cards / 2) * (side + 10) - 10))
+	grid.Size = UDim2.new(1, 0, 0, height)
 end
 connect(grid:GetPropertyChangedSignal("AbsoluteSize"), updateGridSize)
 local function toggleFavorite(item, favoriteButton)
@@ -1625,7 +1668,7 @@ local function toggleFavorite(item, favoriteButton)
 		renderCards(false)
 	else
 		favoriteButton.Text = favorites:contains(item.Id) and "★" or "☆"
-		tween(favoriteButton, { TextColor3 = favorites:contains(item.Id) and C.text or C.muted })
+		tween(favoriteButton, { TextColor3 = favorites:contains(item.Id) and C.favorite or C.muted })
 	end
 end
 renderCards = function(animate)
@@ -1654,12 +1697,12 @@ renderCards = function(animate)
 			local card = make("Frame", {
 				Name = "Emote_" .. tostring(item.Id),
 				BackgroundColor3 = C.surface,
-				BackgroundTransparency = 0.2,
+				BackgroundTransparency = 0.54,
 				BorderSizePixel = 0,
 				LayoutOrder = count,
 				ClipsDescendants = true,
 			}, grid)
-			rounded(card, 14)
+			rounded(card, 10)
 			local border = stroke(card, state.active and state.active.Id == item.Id and C.accent or C.stroke)
 			table.insert(cards, card)
 			card.Destroying:Connect(function()
@@ -1679,46 +1722,41 @@ renderCards = function(animate)
 				ScaleType = Enum.ScaleType.Fit,
 				AutoButtonColor = false,
 			}, card)
-			rounded(image, 14)
+			rounded(image, 10)
 			local caption = make("Frame", {
 				BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-				BackgroundTransparency = 0.18,
+				BackgroundTransparency = 0.4,
 				BorderSizePixel = 0,
-				Position = UDim2.new(0, 0, 1, -50),
-				Size = UDim2.new(1, 0, 0, 50),
+				Position = UDim2.new(0, 0, 1, -24),
+				Size = UDim2.new(1, 0, 0, 24),
 			}, image)
 			text(
 				caption,
 				item.Name,
-				12,
+				10,
 				C.text,
-				{ Position = UDim2.fromOffset(8, 5), Size = UDim2.new(1, -62, 0, 22) }
-			)
-			text(
-				caption,
-				item.IsRoblox and "ROBLOX" or "UGC",
-				9,
-				C.muted,
-				{ Position = UDim2.fromOffset(8, 29), Size = UDim2.new(1, -62, 0, 15) }
+				{ Position = UDim2.fromOffset(6, 3), Size = UDim2.new(1, -12, 0, 18) }
 			)
 			local equipped = isEquipped(item.Id)
 			local equip = button(card, equipped and "✓" or "+", {
 				Name = "Equip",
-				Position = UDim2.new(1, -48, 1, -48),
-				Size = UDim2.fromOffset(44, 44),
-				TextSize = 21,
+				Position = UDim2.fromOffset(4, 4),
+				Size = UDim2.fromOffset(28, 28),
+				TextSize = 17,
 				BackgroundColor3 = equipped and C.selected or C.elevated,
 				TextColor3 = equipped and C.background or C.text,
 			})
 			local favoriteButton = button(card, favorites:contains(item.Id) and "★" or "☆", {
 				Name = "Favorite",
-				Position = UDim2.new(1, -48, 0, 4),
-				Size = UDim2.fromOffset(44, 44),
-				TextSize = 23,
+				Position = UDim2.new(1, -32, 0, 4),
+				Size = UDim2.fromOffset(28, 28),
+				TextSize = 17,
 				BackgroundColor3 = C.background,
-				BackgroundTransparency = 0.2,
-				TextColor3 = favorites:contains(item.Id) and C.text or C.muted,
+				BackgroundTransparency = 0.4,
+				TextColor3 = favorites:contains(item.Id) and C.favorite or C.muted,
 			})
+			equip:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0, 8)
+			favoriteButton:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0, 8)
 			image.MouseEnter:Connect(function()
 				tween(border, { Transparency = 0 }, 0.18)
 			end)
@@ -1801,7 +1839,7 @@ local function renderSlots()
 	for i = 1, Config.MaxEquipped do
 		local item = state.equipped[i]
 		local slot = button(quickScroll, item and "" or tostring(i), {
-			Size = UDim2.fromOffset(50, 50),
+			Size = UDim2.fromOffset(38, 38),
 			LayoutOrder = i,
 			TextColor3 = C.muted,
 			BackgroundColor3 = item and C.elevated or C.surface,
@@ -1940,19 +1978,19 @@ local function resize()
 	if activeTweens[launcher] then
 		activeTweens[launcher]:Cancel()
 	end
-	panel.Size = UDim2.fromOffset(math.min(440, size.X - 16), math.min(740, size.Y - 16))
-	detailUI.card.Size = UDim2.fromOffset(panel.Size.X.Offset - 24, math.min(430, panel.Size.Y.Offset - 24))
+	panel.Size = UDim2.fromOffset(HubLayout.window(size.X, size.Y))
+	detailUI.card.Size = UDim2.fromOffset(panel.Size.X.Offset - 20, math.min(368, panel.Size.Y.Offset - 20))
 	local side = math.min(
-		188,
-		math.max(80, detailUI.card.Size.X.Offset - 56),
-		math.max(88, detailUI.card.Size.Y.Offset - 242)
+		144,
+		math.max(80, detailUI.card.Size.X.Offset - 48),
+		math.max(80, detailUI.card.Size.Y.Offset - 210)
 	)
 	detailUI.preview.Size = UDim2.fromOffset(side, side)
-	detailUI.content.Size = UDim2.new(1, -6, 0, side + 150)
+	detailUI.content.Size = UDim2.new(1, -6, 0, side + 126)
 	for index, field in ipairs({ "name", "creator", "price", "message" }) do
-		local y = side + ({ 10, 38, 64, 92 })[index]
+		local y = side + ({ 8, 30, 52, 78 })[index]
 		detailUI[field].Position = UDim2.fromOffset(0, y)
-		detailUI[field].Size = UDim2.new(1, 0, 0, field == "message" and 48 or 24)
+		detailUI[field].Size = UDim2.new(1, 0, 0, field == "message" and 44 or 22)
 	end
 	updateGridSize()
 	if not positioned then
@@ -2112,7 +2150,7 @@ connect(controlsToggle.Activated, function()
 	local ticket = controlsRevision
 	controlsGroup.Visible = true
 	controlsToggle.Text = controlsOpen and "⌃" or "≡"
-	tween(controlsGroup, { Size = UDim2.new(1, 0, 0, controlsOpen and 128 or 0) }, 0.24)
+	tween(controlsGroup, { Size = UDim2.new(1, 0, 0, controlsOpen and 106 or 0) }, 0.24)
 	task.delay(0.25, function()
 		if not destroyed and ticket == controlsRevision and not controlsOpen then
 			controlsGroup.Visible = false
@@ -2160,12 +2198,20 @@ local function selectView(name)
 	searchBox.Text = viewQueries[name]
 	searchBox.PlaceholderText = name == "Catálogo" and "Buscar nombre, ID o enlace…"
 		or "Filtrar tu colección…"
-	for i, key in ipairs({ "Catálogo", "Favoritos", "Equipados" }) do
+	navIndicator.Visible = name ~= "Favoritos"
+	for i, key in ipairs({ "Catálogo", "Equipados" }) do
 		if key == name then
-			tween(navIndicator, { Position = UDim2.new((i - 1) / 3, 4, 0, 4) }, 0.25)
+			tween(navIndicator, { Position = UDim2.new((i - 1) / 2, 4, 0, 4) }, 0.25)
 		end
 		tween(viewButtons[key], { TextColor3 = key == name and C.background or C.muted })
 	end
+	local favoriteView = name == "Favoritos"
+	tween(favoritesNav, {
+		BackgroundColor3 = favoriteView and C.favorite or C.elevated,
+		BackgroundTransparency = favoriteView and 0.06 or 0.42,
+		TextColor3 = favoriteView and C.background or C.text,
+	}, 0.2)
+	tween(favoritesBorder, { Color = favoriteView and C.favorite or C.stroke }, 0.2)
 	body.CanvasPosition = Vector2.new(0, 0)
 	pageSurface.GroupTransparency = 0.45
 	tween(pageSurface, { GroupTransparency = 0 }, 0.25)

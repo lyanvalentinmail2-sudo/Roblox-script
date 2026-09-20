@@ -17,11 +17,25 @@ check(
 click(icon, 0.4)
 check(panel.Visible and not icon.Visible and panel.GroupTransparency == 0, "UI: apertura animada al tocar")
 check(catalogCalls == 1, "UI: catálogo se consulta al abrir por primera vez")
+check(panel.Size.X.Offset <= 400 and panel.Size.Y.Offset <= 560, "UI: ventana compacta")
+check(panel.BackgroundTransparency >= 0.55, "UI: vidrio más transparente")
+local favoriteTab = find(gui, "Favoritos")
+check(favoriteTab.Parent == panel and favoriteTab.Text == "★", "UI: estrella en cabecera")
+check(
+	favoriteTab.Size.X.Offset == 36 and favoriteTab.Size.Y.Offset == 36,
+	"UI: botón favoritos cuadrado compacto"
+)
+check(favoriteTab.BackgroundColor3.R < 0.5, "UI: favoritos no seleccionado es neutro")
 local layout = find(gui, "SquareLayout")
 check(layout.CellSize.X.Offset == layout.CellSize.Y.Offset, "UI: tarjetas de emote cuadradas")
+check(layout.FillDirectionMaxCells == 3, "UI: tres emotes por fila en teléfono")
 check(panel.BackgroundColor3.R < 0.03 and panel.BackgroundColor3.G < 0.03, "UI: fondo negro")
 check(tweenCount > 0, "UI: usa tweens reales del adaptador")
 local first = find(gui, "Emote_123")
+check(
+	find(first, "Favorite").Size.X.Offset == 28 and find(first, "Equip").Size.X.Offset == 28,
+	"UI: acciones de tarjeta compactas"
+)
 local requestsBefore = #requests
 click(find(first, "SelectEmote"), 0.4)
 local detailOverlay = find(gui, "EmoteDetailsOverlay")
@@ -65,6 +79,7 @@ viewport = vector(740, 320)
 find(gui, "SafeArea"):GetPropertyChangedSignal("AbsoluteSize"):Fire()
 advance(0.3)
 check(icon.Position.X.Offset == 684, "UI: acceso sigue en el lateral al girar pantalla")
+check(layout.FillDirectionMaxCells == 4, "UI: cuatro emotes por fila en ancho mayor")
 check(
 	preview.Size.X.Offset == preview.Size.Y.Offset and preview.Size.Y.Offset <= 100,
 	"UI: ficha compacta en horizontal"
@@ -74,11 +89,20 @@ viewport = vector(390, 740)
 find(gui, "SafeArea"):GetPropertyChangedSignal("AbsoluteSize"):Fire()
 advance(0.3)
 check(icon.Position.X.Offset == 334, "UI: vuelve al lateral en vertical")
+check(layout.FillDirectionMaxCells == 3, "UI: vuelve a tres columnas sin recrear el hub")
 
 click(find(first, "Favorite"), 0.4)
 check(find(first, "Favorite").Text == "★", "UI: estrella activada")
 check(playerGui:GetAttribute("FEEmotesFavoritesV1") ~= nil, "UI: favoritos guardados en sesión")
-click(find(navigation, "Favoritos"), 0.4)
+click(find(gui, "Favoritos"), 0.4)
+check(
+	favoriteTab.BackgroundColor3.R == 1 and favoriteTab.BackgroundColor3.G == 211 / 255,
+	"UI: favoritos seleccionado amarillo"
+)
+favoriteTab.MouseEnter:Fire()
+favoriteTab.MouseLeave:Fire()
+advance(0.3)
+check(favoriteTab.BackgroundColor3.R == 1, "UI: hover no borra el amarillo de favoritos")
 check(find(gui, "Emote_123") ~= nil, "UI: colección favorita independiente")
 local search = find(gui, "Search")
 search.Text = "no match"
@@ -101,14 +125,16 @@ for _, object in ipairs(gui:GetDescendants()) do
 	end
 end
 check(not found, "UI: quitar favorito actualiza la sección")
+check(favoriteTab.BackgroundColor3.R == 1, "UI: favoritos vacío sigue seleccionado amarillo")
 click(find(navigation, "Catálogo"), 0.4)
+check(favoriteTab.BackgroundColor3.R < 0.5, "UI: salir de favoritos restaura el color neutro")
 check(
 	find(find(gui, "Emote_123"), "Favorite").Text == "☆",
 	"UI: catálogo conserva el emote al quitar favorito"
 )
 click(find(gui, "PlayerControls"), 0.4)
 check(
-	find(gui, "ExpandedPlayer").Visible and find(gui, "ExpandedPlayer").Size.Y.Offset == 128,
+	find(gui, "ExpandedPlayer").Visible and find(gui, "ExpandedPlayer").Size.Y.Offset == 106,
 	"UI: controles desplegados"
 )
 click(find(gui, "PlayerControls"), 0)

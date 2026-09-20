@@ -1,4 +1,4 @@
-# FE Emotes · GLASS
+# FE Emotes · GLASS COMPACT
 
 **Tu avatar. Tu ritmo.** Un sistema de emotes para tu propia experiencia de Roblox, con interfaz glass oscura, tarjetas cuadradas, ficha de emote, biblioteca personal y controles pensados para teléfono. El patrón de catálogo/ficha está inspirado en editores de avatar como «Mi Avatar»; es un diseño propio, no una réplica exacta de ese juego.
 
@@ -16,14 +16,15 @@
 ## Funciones
 
 - **Inicio cerrado**: solo aparece un botón lateral FE de **48 × 48 px**, con `UICorner` de 12 px. Tócalo para abrir; el catálogo se consulta al abrir por primera vez, no al ejecutar el archivo.
-- **Glass UI oscura**: transparencias, reflejos y bordes finos; apertura con escala y fundido. No cambia `Lighting` ni añade desenfoque global al juego.
-- **Tarjetas cuadradas**: dos columnas que conservan su proporción al girar el teléfono.
+- **Glass UI más transparente**: fondo al 58% de transparencia, superficies translúcidas, reflejos y bordes finos; apertura con escala y fundido. No cambia `Lighting` ni añade desenfoque global al juego.
+- **Ventana compacta**: máximo **400 × 560 px**, con márgenes de 12 px para pantallas más pequeñas. Controles de cabecera de 36 px, acciones de tarjeta de 28 px y botones principales de la ficha de 40 px.
+- **Más emotes por fila**: **3 columnas en teléfonos habituales y 4 con más ancho**; las tarjetas siguen siendo cuadradas. Baja a 2 o 1 solo si el espacio es demasiado estrecho.
 - **Ficha del emote**: tocar una tarjeta muestra su miniatura sobre un cuadrado negro y dos acciones principales: **Desplegar** (reproducir) y **Comprar** (confirmación oficial de Roblox).
 - **Compra explícita**: consulta precio orientativo, disponibilidad y propiedad. Nunca se compra automáticamente ni se considera un evento de cierre como recibo de compra.
 
 - **Catálogo real**: búsqueda por nombre, ID o enlace de catálogo; miniaturas y paginación.
 - **UGC + no UGC**: filtros Todos, UGC y Roblox dentro de Catálogo; Equipados tiene su propia pestaña. UGC identifica creadores distintos del usuario oficial Roblox; los filtros se aplican a las páginas cargadas.
-- **Zona Favoritos independiente**: marca ☆ en cualquier tarjeta y encuentra tus emotes en la pestaña Favoritos. Hasta 120, búsqueda local y conservación durante la sesión, incluso al volver a ejecutar el archivo. No consume los ocho espacios equipados.
+- **Zona Favoritos independiente**: marca ☆ en cualquier tarjeta y abre la colección con el botón cuadrado **★ de la cabecera**. Ese botón se ilumina en amarillo mientras estás en Favoritos y vuelve a neutro al salir. Hasta 120, búsqueda local y conservación durante la sesión, incluso al volver a ejecutar el archivo. No consume los ocho espacios equipados.
 - **Animaciones TweenService**: entrada/salida del panel, selector de pestañas, tarjetas, botones, controles desplegables y slider; sin animaciones infinitas en segundo plano.
 - **8 accesos rápidos**: equipar, reproducir y quitar emotes sin escribir comandos.
 - **Velocidad de 0,25× a 3×**: deslizador táctil y botones de ajuste de 0,25×.
@@ -31,7 +32,7 @@
 - **Pausar pose**: congela el fotograma con velocidad cero. Es independiente de “Mantener”; activa ambos para moverte con la pose congelada.
 - **Minimizar**: el emote sigue funcionando y aparece el **botón cuadrado lateral FE**. Arrástralo para colocarlo donde quieras; tócalo para abrir el panel.
 - **Cerrar**: detiene el emote, cancela su carga pendiente y oculta el panel. El icono **FE** permite volver a abrirlo.
-- Ventana arrastrable, zonas seguras de pantalla, ajuste al girar el teléfono y botones principales de al menos 44 px. Atajo **M** en PC.
+- Ventana arrastrable, zonas seguras de pantalla, ajuste al girar el teléfono y controles compactos. El acceso lateral conserva sus 48 px para localizarlo fácilmente. Atajo **M** en PC.
 - Validación de IDs, tipo de asset, velocidad, personaje R15 y frecuencia de solicitudes en el servidor; limpieza al morir o salir.
 
 ## Instalación rápida en Studio
@@ -42,7 +43,7 @@
 
    | Dentro del paquete | Destino real |
    | --- | --- |
-   | `ReplicatedStorage/FEEmotes` (Folder con cinco módulos) | `game.ReplicatedStorage` |
+   | `ReplicatedStorage/FEEmotes` (Folder con seis módulos) | `game.ReplicatedStorage` |
    | `ServerScriptService/FEEmotes` (Script) | `game.ServerScriptService` |
    | `StarterPlayer/StarterPlayerScripts/FEEmotes` (LocalScript) | `game.StarterPlayer.StarterPlayerScripts` |
 
@@ -64,6 +65,7 @@ ReplicatedStorage
     ├── Validation                   ModuleScript ← src/ReplicatedStorage/FEEmotes/Validation.lua
     ├── Favorites                    ModuleScript ← src/ReplicatedStorage/FEEmotes/Favorites.lua
     ├── HubState                     ModuleScript ← src/ReplicatedStorage/FEEmotes/HubState.lua
+    ├── HubLayout                    ModuleScript ← src/ReplicatedStorage/FEEmotes/HubLayout.lua
     └── EmoteDetails                 ModuleScript ← src/ReplicatedStorage/FEEmotes/EmoteDetails.lua
 ServerScriptService
 └── FEEmotes                         Script ← src/ServerScriptService/FEEmotes.server.lua
@@ -89,7 +91,7 @@ Conecta el plugin al proyecto. La configuración sincroniza únicamente los comp
 1. Al ejecutar aparece solo el cuadrado **FE** del lateral. Tócalo para abrir el hub.
 2. Toca una **tarjeta cuadrada** para abrir la ficha. Pulsa **Desplegar** para reproducir; **Comprar** abre la confirmación oficial de Roblox si el artículo está disponible. Los accesos rápidos equipados siguen reproduciendo con un toque.
 3. Toca **+** en una tarjeta para equiparla. En **Equipados**, usa **✓** para liberar un espacio.
-4. Marca **☆** para guardar un favorito. La pestaña **Favoritos** muestra tu colección aunque cambies de búsqueda o de página del catálogo. Usa **★** para quitarlo. El buscador de Favoritos filtra por nombre, creador o ID, sin llamar al catálogo.
+4. Marca **☆** para guardar un favorito. El botón **★ de arriba** abre Favoritos y se ilumina en amarillo; esa sección muestra tu colección aunque cambies de búsqueda o de página del catálogo. Usa **★** para quitarlo. El buscador de Favoritos filtra por nombre, creador o ID, sin llamar al catálogo.
 5. Para un ID concreto, introduce el ID **del emote del catálogo**, o `https://www.roblox.com/catalog/ID/Nombre`, y pulsa **Ir →**. Se abre la ficha para consultar sus datos. Desplegar solicita al servidor la validación y reproducción; si funciona, se añade también a la lista para equiparlo.
 6. Abre **≡** en la tarjeta del reproductor para desplegar velocidad y opciones. Ajusta la velocidad. Activa **Mantener** si quieres seguir moviéndote sin que se cancele.
 7. Usa **Pausar pose** para parar la animación en el fotograma actual; **Reanudar pose** recupera la velocidad elegida.
@@ -129,7 +131,7 @@ Cerrar la ficha cancela consultas y avisos aún no abiertos, **pero no cierra un
 
 ## Configuración
 
-Edita `Config.lua` para cambiar los destacados, rango de velocidad, número de accesos y tiempo máximo de carga. La interfaz de esta versión está diseñada para **8** espacios; si cambias ese máximo, actualiza también los textos y el diseño. Los destacados son un respaldo cuando el catálogo tarda o falla; su disponibilidad puede cambiar en Roblox.
+Edita `HubLayout.lua` para ajustar el tamaño máximo y las reglas de columnas; conserva espacio suficiente para las acciones de tarjeta. Edita `Config.lua` para cambiar los destacados, rango de velocidad, número de accesos y tiempo máximo de carga. La interfaz de esta versión está diseñada para **8** espacios; si cambias ese máximo, actualiza también los textos y el diseño. Los destacados son un respaldo cuando el catálogo tarda o falla; su disponibilidad puede cambiar en Roblox.
 
 Se cargan 30 resultados por página y hasta 120 por búsqueda para limitar instancias en móviles. Los filtros UGC/Roblox son locales a esas páginas: **Cargar más** puede revelar más coincidencias. Una búsqueda nueva reinicia la lista. Solo al seleccionar una ficha se consulta si tu cuenta posee ese asset; no se lee el inventario completo. La confirmación de compra solo se abre al pulsar **Comprar**.
 
@@ -147,13 +149,14 @@ npm test
 - Pruebas de validación, límites y clasificación de creadores.
 - Pruebas del servidor con dobles de servicios: reproducción, velocidad, congelación, movimiento, cancelación, timeout, equipados, permisos, R6, muerte y desconexión.
 - Pruebas de la ficha y compra: precio, propiedad, fuera de venta, errores, doble pulsación, cancelación, consultas obsoletas y destrucción. Usan dobles: **no hacen compras reales**.
+- Pruebas de geometría adaptable: límites de ventana, 3/4 columnas, respaldos en anchos extremos, filas incompletas y colecciones vacías; pruebas de selección amarilla de Favoritos.
 - Pruebas de favoritos: añadir/quitar, límite, búsquedas, copia defensiva, restauración y datos inválidos; tickets de transición contra callbacks antiguos.
 - Pruebas estructurales de la GUI con dobles: favoritos, filtros, controles, minimizar/restaurar, arrastrar el icono, recrear la interfaz y liberar tweens. No son pruebas visuales ni de un dispositivo real.
 - 30 comprobaciones adicionales del controlador local: carga de catálogo, movimiento, ajustes, permisos, timeout, limpieza y reinyección.
 - Verificación de que el modelo importable y el archivo único coinciden exactamente con las fuentes.
 - GitHub Actions ejecuta estas comprobaciones en cada push y pull request.
 
-**Actualizar desde una versión anterior:** vuelve a descargar el archivo único; el cargador fijado a un commit antiguo no se actualiza solo. En Studio reemplaza el paquete e incluye los nuevos módulos `Favorites`, `HubState` y `EmoteDetails`, sin duplicar los scripts.
+**Actualizar desde una versión anterior:** vuelve a descargar el archivo único; el cargador fijado a un commit antiguo no se actualiza solo. En Studio reemplaza el paquete e incluye los nuevos módulos `Favorites`, `HubState`, `HubLayout` y `EmoteDetails`, sin duplicar los scripts.
 
 Después de editar fuentes:
 

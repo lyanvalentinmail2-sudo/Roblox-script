@@ -1,4 +1,4 @@
-# FE Emotes GLASS — archivo único para ejecutores
+# FE Emotes GLASS COMPACT — archivo único para ejecutores
 
 ## Qué archivo usar
 
@@ -20,7 +20,7 @@ No requiere claves propias ni archivos auxiliares. La reproducción necesita que
 
 ## Tarjetas y ficha del emote
 
-El catálogo está formado por **tarjetas cuadradas**, en dos columnas. El patrón de catálogo y ficha está inspirado en editores como «Mi Avatar», con diseño propio; no es una copia exacta del juego.
+El catálogo está formado por **tarjetas cuadradas**, con **3 emotes por fila en teléfonos habituales y 4 cuando hay más ancho**. En espacios excepcionalmente estrechos baja a 2 o 1 para evitar recortes. El patrón de catálogo y ficha está inspirado en editores como «Mi Avatar», con diseño propio; no es una copia exacta del juego.
 
 Toca la imagen de una tarjeta para abrir su ficha. **Tocar la tarjeta no reproduce ni compra nada.** La ficha muestra:
 
@@ -28,6 +28,8 @@ Toca la imagen de una tarjeta para abrir su ficha. **Tocar la tarjeta no reprodu
 - Nombre, creador y precio orientativo o estado de disponibilidad.
 - **Desplegar:** reproduce el emote en tu personaje, sujeto a los permisos del juego y Roblox.
 - **Comprar:** abre la ventana oficial de confirmación de Roblox.
+
+El nombre completo y el creador se muestran en la ficha; las tarjetas densas reservan su pie al nombre y sus esquinas a **+** y **☆**.
 
 La ficha se puede cerrar con **×** o tocando su fondo. En horizontal, la miniatura se reduce y el contenido se desplaza; ambos botones principales quedan fuera del área desplazable para seguir accesibles.
 
@@ -49,7 +51,8 @@ El hub usa `GetProductInfoAsync` para consultar los datos del asset y `PlayerOwn
 ## Resto de controles
 
 - **Búsqueda:** nombre, ID del emote o enlace de catálogo. Un ID/enlace abre la ficha, no una reproducción automática.
-- **Catálogo / Favoritos / Equipados:** tres zonas; dentro de Catálogo, Todos / UGC / Roblox filtra las páginas cargadas.
+- **Catálogo / Equipados:** pestañas compactas. Dentro de Catálogo, Todos / UGC / Roblox filtra las páginas cargadas.
+- **★ de la cabecera:** botón cuadrado de Favoritos. Se ilumina en **amarillo** cuando esa sección está seleccionada y vuelve a gris al cambiar a Catálogo o Equipados. Sigue amarillo aunque la colección esté vacía; no es un indicador de cuántos favoritos tienes.
 - **Favoritos:** hasta 120, búsqueda local por nombre, creador o ID; no consume espacios de Equipados.
 - **≡ Controles:** despliega velocidad, Mantener y Pausar pose desde el reproductor.
 - **Velocidad:** deslizador y botones de 0,25× a 3×.
@@ -64,7 +67,9 @@ Los accesos rápidos sobreviven al respawn, pero no al salir ni a ejecutar de nu
 
 ## Glass UI y animaciones
 
-- Negro translúcido, reflejos suaves, bordes finos y texto blanco. Es un efecto de cristal **simulado mediante GUI**: no modifica Lighting ni desenfoca globalmente el juego.
+- Ventana de hasta **400 × 560 px**, más pequeña que las versiones anteriores, adaptada con márgenes de 12 px.
+- Cabecera con botones de 36 px, acciones de tarjeta de 28 px y acciones Desplegar/Comprar de 40 px; ficha y reproductor también compactados.
+- Negro translúcido al 58% de transparencia, superficies internas más transparentes, reflejos suaves, bordes finos y texto blanco con una sombra sutil para mantener legibilidad. Es un efecto de cristal **simulado mediante GUI**: no modifica Lighting ni desenfoca globalmente el juego.
 - Apertura/cierre con escala y fundido; navegación deslizante, feedback al pulsar, tarjetas y controles animados.
 - El cuadrado lateral y las tarjetas conservan su forma al girar el teléfono.
 - Los tweens se cancelan al reemplazarlos o destruir la GUI. No hay animaciones infinitas por tarjeta.
@@ -89,7 +94,7 @@ No se garantiza que otros jugadores vean el emote ni que todos los assets del ca
 
 ## Desarrollo
 
-`FEEmotes-Delta.lua` se genera desde `src/Standalone/Controller.lua`, la GUI y los módulos `Config`, `Validation`, `Favorites`, `HubState` y `EmoteDetails`.
+`FEEmotes-Delta.lua` se genera desde `src/Standalone/Controller.lua`, la GUI y los módulos `Config`, `Validation`, `Favorites`, `HubState`, `HubLayout` y `EmoteDetails`.
 
 ```sh
 npm run format

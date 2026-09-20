@@ -248,6 +248,7 @@ local sharedModules = {
 	Validation = Validation,
 	Favorites = Favorites,
 	HubState = HubState,
+	HubLayout = HubLayout,
 	EmoteDetails = EmoteDetails,
 	Request = remote,
 }
