@@ -1,74 +1,95 @@
-# FE Emotes NOIR — archivo único para ejecutores
+# FE Emotes GLASS — archivo único para ejecutores
 
 ## Qué archivo usar
 
 Usa **[`FEEmotes-Delta.lua`](../FEEmotes-Delta.lua)**, no el modelo `.rbxmx` ni los scripts separados de Studio.
 
-Es una versión de ejecución **local** para un entorno Lua cliente como Delta. Incluye los módulos, el controlador y toda la GUI en un solo archivo: no espera scripts del servidor, no usa remotos del juego y no descarga librerías para dibujar la interfaz.
+Es una versión de ejecución **local** para un entorno Lua cliente como Delta. Incluye módulos, controlador y GUI en un solo archivo. No espera componentes del servidor, no usa remotos del juego ni descarga librerías de interfaz.
 
-**Compatibilidad pendiente de comprobar en Delta real.** Las pruebas de este repositorio verifican sintaxis y lógica mediante dobles de servicios; no ejecutan Delta ni el motor de Roblox.
+**Compatibilidad pendiente de comprobar en Delta real.** Las pruebas del repositorio verifican sintaxis y lógica con dobles de servicios; no ejecutan Delta ni el motor de Roblox, y no realizan compras reales.
 
-## Cómo probarlo
+## Cómo abrirlo
 
-1. Abre el archivo `FEEmotes-Delta.lua` en GitHub y pulsa **Raw** para ver el código completo.
-2. Copia **todo** el código. No copies el HTML de la página de GitHub ni solo un fragmento.
-3. Entra con un avatar **R15**, espera a que el personaje termine de cargar y pega el código en el editor de tu ejecutor.
-4. Ejecuta el archivo. Debería aparecer **FE Emotes / NOIR EDITION / LOCAL · R15**.
-5. Toca la imagen de un emote para reproducirlo; **+ Equipar** lo añade a los ocho accesos rápidos.
+1. Abre `FEEmotes-Delta.lua` en GitHub y pulsa **Raw**.
+2. Copia **todo** el código y pégalo en el editor del ejecutor después de que cargue tu personaje R15.
+3. Ejecuta. **El panel NO se abre solo:** verás un cuadrado **FE** de 48 × 48 px en el lateral derecho, con esquinas redondeadas (`UICorner`).
+4. Toca ese cuadrado para abrir el hub con una animación de escala y fundido. Se consulta el catálogo en la primera apertura.
+5. Arrástralo si prefieres el otro lateral; al soltarlo se ajusta al borde más cercano. Arrastrar no cuenta como un toque para abrir.
 
-No requiere claves propias, archivos auxiliares, Studio ni componentes de servidor. La carga de emotes necesita que el entorno permita `game:GetObjects`; si no, muestra un error. Usa esta versión donde tengas permiso. Los ejecutores pueden contravenir las normas de Roblox y poner en riesgo tu cuenta; este proyecto no ofrece protección contra sanciones.
+No requiere claves propias ni archivos auxiliares. La reproducción necesita que el entorno permita `game:GetObjects`; si no, muestra un error. Usa esta versión donde tengas permiso. Los ejecutores pueden contravenir las normas de Roblox y poner en riesgo tu cuenta; este proyecto no ofrece protección contra sanciones.
 
-## Controles
+## Tarjetas y ficha del emote
 
-- **Búsqueda:** nombre, ID del emote del catálogo o enlace de Roblox. No sirve un ID de accesorio o bundle.
-- **Catálogo / Favoritos / Equipados:** tres zonas distintas con transición animada. Dentro de Catálogo, Todos / UGC / Roblox filtra las páginas cargadas.
-- **☆ / ★ Favoritos:** guarda o quita emotes de tu biblioteca (hasta 120). Busca localmente por nombre, creador o ID. No usa los espacios de Equipados.
-- **≡ Controles:** despliega velocidad, Mantener y Pausar pose desde la tarjeta del reproductor.
-- **Velocidad:** deslizador o `−` / `+`, de 0,25× a 3×.
-- **Mantener:** evita cancelar el emote al caminar o saltar. No ancla al avatar ni modifica WalkSpeed.
-- **Pausar pose:** detiene el fotograma. Activa también Mantener para moverte con la pose pausada.
-- **Minimizar `−`:** mantiene el emote y deja un **icono circular negro FE** para volver a abrir el panel. Muestra un punto blanco cuando hay un emote activo.
+El catálogo está formado por **tarjetas cuadradas**, en dos columnas. El patrón de catálogo y ficha está inspirado en editores como «Mi Avatar», con diseño propio; no es una copia exacta del juego.
+
+Toca la imagen de una tarjeta para abrir su ficha. **Tocar la tarjeta no reproduce ni compra nada.** La ficha muestra:
+
+- La miniatura del emote sobre un **cuadrado negro**.
+- Nombre, creador y precio orientativo o estado de disponibilidad.
+- **Desplegar:** reproduce el emote en tu personaje, sujeto a los permisos del juego y Roblox.
+- **Comprar:** abre la ventana oficial de confirmación de Roblox.
+
+La ficha se puede cerrar con **×** o tocando su fondo. En horizontal, la miniatura se reduce y el contenido se desplaza; ambos botones principales quedan fuera del área desplazable para seguir accesibles.
+
+En las tarjetas, **+** añade un emote a los ocho accesos rápidos; **✓** lo retira. **☆ / ★** guarda o quita un favorito. Estos controles son independientes de Comprar.
+
+## Compra: sin cargos automáticos
+
+El hub usa `GetProductInfoAsync` para consultar los datos del asset y `PlayerOwnsAssetAsync` para verificar si ya lo tienes. **Comprar** solo llama a `MarketplaceService:PromptPurchase` tras una pulsación explícita, con el ID del emote seleccionado.
+
+- El precio del hub es **orientativo**. Revisa el precio final y confirma o cancela dentro de la ventana oficial de Roblox.
+- Comprar queda desactivado durante la consulta, si ya tienes el artículo, si está fuera de venta directa, si falla la comprobación de propiedad o si ya hay una compra pendiente.
+- Los artículos gratuitos también requieren el aviso oficial. No se ofrecen compras de reventa de assets marcados fuera de venta directa.
+- No se usan productos de desarrollador, game passes ni IDs de terceros como sustitutos del emote.
+- El evento de cierre del aviso **no se considera recibo**. Si Roblox informa una respuesta positiva, se vuelve a verificar la propiedad antes de mostrar que lo tienes.
+- Cerrar la ficha cancela una apertura de compra aún pendiente. **Un aviso oficial ya abierto se cancela en Roblox**, no al minimizar el hub.
+- La compra cliente puede estar restringida por el juego, el entorno o la ubicación de venta del asset; se informa del error sin intentar eludirlo.
+- Comprar no reproduce ni equipa automáticamente en este hub.
+
+## Resto de controles
+
+- **Búsqueda:** nombre, ID del emote o enlace de catálogo. Un ID/enlace abre la ficha, no una reproducción automática.
+- **Catálogo / Favoritos / Equipados:** tres zonas; dentro de Catálogo, Todos / UGC / Roblox filtra las páginas cargadas.
+- **Favoritos:** hasta 120, búsqueda local por nombre, creador o ID; no consume espacios de Equipados.
+- **≡ Controles:** despliega velocidad, Mantener y Pausar pose desde el reproductor.
+- **Velocidad:** deslizador y botones de 0,25× a 3×.
+- **Mantener:** caminar o saltar no cancela la pista; no modifica WalkSpeed ni ancla al personaje.
+- **Pausar pose:** congela el fotograma. Activa también Mantener para moverte con la pose pausada.
+- **Minimizar `−`:** conserva el emote y devuelve el cuadrado lateral FE.
 - **Detener `■`:** detiene la pista y cancela su carga pendiente.
-- **Cerrar `×`:** detiene y oculta el panel, dejando el botón FE para volver a abrirlo.
-- **Arrastrar:** usa la cabecera del panel o arrastra el icono FE. Arrastrar el icono no cuenta como un toque de apertura.
-- **Volver a ejecutar:** destruye la GUI anterior y su controlador antes de crear una nueva. Reinicia los accesos y ajustes, pero conserva los favoritos mientras permanezca el mismo PlayerGui de la sesión.
+- **Cerrar `×`:** detiene el emote y oculta el panel, dejando FE para reabrir.
+- **Volver a ejecutar:** limpia la GUI anterior y empieza cerrado. Reinicia accesos/ajustes, pero conserva favoritos si continúa el mismo PlayerGui de la sesión.
 
-Los accesos rápidos sobreviven a la reaparición, pero no se guardan al salir del juego ni al volver a ejecutar el archivo. Los **favoritos** sobreviven además a volver a ejecutar el archivo: se guardan en un atributo local de PlayerGui, no en archivos del teléfono. Al salir de la sesión no se garantiza su conservación. Equipar o marcar como favorito no compra artículos ni cambia el inventario o la rueda global de tu cuenta.
+Los accesos rápidos sobreviven al respawn, pero no al salir ni a ejecutar de nuevo el archivo. Los favoritos se guardan en un atributo local de PlayerGui; no se escriben archivos en el teléfono ni hay persistencia entre sesiones. Equipar o marcar favoritos no compra artículos.
 
-## Diseño NOIR y animaciones
+## Glass UI y animaciones
 
-- Fondo negro y superficies grafito; botones seleccionados blancos, texto de alto contraste y tarjetas redondeadas.
-- Apertura/cierre con escala y fundido; navegación con indicador deslizante; feedback al tocar botones y estrellas.
-- Entrada escalonada de las primeras tarjetas, controles desplegables y movimientos del slider.
-- Los tweens se cancelan al reemplazarlos o destruir la GUI. No hay bucles de animación permanentes por tarjeta.
-- Puedes minimizar y volver a abrir rápidamente: una transición anterior no debería ocultar el panel nuevo.
+- Negro translúcido, reflejos suaves, bordes finos y texto blanco. Es un efecto de cristal **simulado mediante GUI**: no modifica Lighting ni desenfoca globalmente el juego.
+- Apertura/cierre con escala y fundido; navegación deslizante, feedback al pulsar, tarjetas y controles animados.
+- El cuadrado lateral y las tarjetas conservan su forma al girar el teléfono.
+- Los tweens se cancelan al reemplazarlos o destruir la GUI. No hay animaciones infinitas por tarjeta.
+- Las transiciones antiguas no deben ocultar un panel o ficha que ya hayas reabierto.
 
-**Actualiza tu cargador:** si usaste el código anterior con un hash de commit, ese enlace sigue apuntando a la versión antigua. Copia el nuevo archivo o usa el nuevo enlace de esta actualización.
+**Actualiza el cargador:** los enlaces anteriores fijados a un hash siguen cargando la versión vieja. Copia el nuevo archivo o usa el enlace de esta actualización.
 
-## Límites importantes
+## Límites y errores
 
-- **No garantiza que otros jugadores vean el emote.** La replicación de una animación iniciada desde el cliente depende del Animator existente, del juego y de los permisos de Roblox. No se crea un Animator local para fingir que existe replicación FE.
-- Los emotes UGC y oficiales se buscan en el catálogo; solo se reproducen los que Roblox y el entorno permitan cargar.
-- No elude permisos de animación ni restricciones de assets. No modifica anticheats ni otros jugadores.
-- `GetObjects` solo se usa para leer la referencia `AnimationId`. Los objetos devueltos se destruyen, nunca se insertan en el mundo ni se ejecutan sus scripts.
-- Las animaciones de combate u otros scripts del juego pueden interrumpir o superponer la pista. “Mantener” no puede garantizar lo contrario.
-- El catálogo puede fallar por conexión o limitaciones del entorno. Se mantienen los destacados como respaldo.
+No se garantiza que otros jugadores vean el emote ni que todos los assets del catálogo se puedan reproducir. La replicación depende del Animator, los permisos y el juego. No se desactivan anticheats ni se modifican otros jugadores. `GetObjects` solo extrae la referencia de animación: los objetos se destruyen sin insertarlos en el mundo ni ejecutar sus scripts.
 
-## Si no funciona
-
-| Mensaje / síntoma | Qué revisar |
+| Síntoma | Qué revisar |
 | --- | --- |
-| No aparece nada | Comprueba que copiaste todo `FEEmotes-Delta.lua`, espera a que cargue el personaje y consulta los errores del ejecutor. |
-| Necesitas R15 | El personaje actual es R6 o todavía no ha cargado. |
-| GetObjects/permisos | El entorno bloquea esa API o el asset está restringido. No se fuerza su carga. |
-| No tiene Animator | Espera a reaparecer; el script no fabrica un Animator para prometer replicación. |
-| Animación no disponible | Prueba un emote oficial distinto; comprueba los permisos y el juego. |
-| No lo ven otros | No hay garantía de FE en esta versión. Para controlar la replicación usa la versión de Studio en tu propia experiencia. |
-| Emote se quita al moverte | Activa Mantener. Si otro sistema del juego lo detiene, este script no lo desactiva. |
+| No aparece el panel | El arranque es cerrado: busca el cuadrado FE del lateral. |
+| Tampoco aparece FE | Comprueba que copiaste todo el archivo y mira los errores del ejecutor. |
+| Necesitas R15 / falta Animator | Espera a cargar o reaparecer con un personaje compatible. |
+| GetObjects/permisos | El entorno bloquea la API o el asset está restringido; no se fuerza su carga. |
+| Comprar está gris | Lee el estado en la ficha: consulta, propiedad, disponibilidad o prompt pendiente. |
+| El precio difiere | El precio válido es el de la confirmación oficial de Roblox, no el orientativo del hub. |
+| No lo ven otros | Esta versión no garantiza FE universal. |
+| Se quita al moverte | Activa Mantener; otros scripts del juego pueden interferir. |
 
-## Desarrollo y pruebas pendientes
+## Desarrollo
 
-No edites a mano `FEEmotes-Delta.lua`: se genera desde `src/Standalone/Controller.lua`, los módulos compartidos (`Config`, `Validation`, `Favorites`, `HubState`) y la GUI de Studio.
+`FEEmotes-Delta.lua` se genera desde `src/Standalone/Controller.lua`, la GUI y los módulos `Config`, `Validation`, `Favorites`, `HubState` y `EmoteDetails`.
 
 ```sh
 npm run format
@@ -76,4 +97,4 @@ npm run package
 npm test
 ```
 
-Antes de afirmar compatibilidad, verificar en un entorno autorizado con Delta: arranque sin componentes de Studio, emote oficial y UGC permitido, velocidad, pausa, movimiento, cerrar durante una carga, reaparición, dos ejecuciones consecutivas, orientación del teléfono y visibilidad desde un segundo cliente.
+Antes de afirmar compatibilidad, realizar las pruebas reales en teléfono, Studio y un entorno autorizado con Delta de [PRUEBAS.md](PRUEBAS.md). Para probar compras, usa cancelación o un artículo gratuito; no confirmes gastos que no desees realizar.

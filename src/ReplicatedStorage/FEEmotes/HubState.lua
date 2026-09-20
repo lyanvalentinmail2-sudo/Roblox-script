@@ -1,7 +1,7 @@
 -- Tickets de transición: un tween antiguo nunca debe ocultar una ventana reabierta.
 local HubState = {}
 function HubState.new()
-	local state = { mode = "open", revision = 0 }
+	local state = { mode = "minimized", revision = 0 }
 	function state:set(mode)
 		if self.mode == "destroyed" or (mode ~= "open" and mode ~= "minimized" and mode ~= "closed") then
 			return nil

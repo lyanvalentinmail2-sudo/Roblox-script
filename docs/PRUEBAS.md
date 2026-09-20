@@ -6,7 +6,7 @@ Estas pruebas requieren Roblox Studio y están **pendientes de ejecución real**
 
 - [ ] Importar `FEEmotes.rbxmx` en una experiencia vacía, mover los componentes y activar el servidor siguiendo el README.
 - [ ] Configurar R15 y abrir un servidor de prueba con dos jugadores. No debe haber errores en Output.
-- [ ] Reproducir un emote oficial permitido. Ambos clientes ven al primer jugador animarse; el segundo jugador no cambia de emote.
+- [ ] Tocar una tarjeta abre la ficha; pulsar Desplegar reproduce un emote oficial permitido. Ambos clientes ven al primer jugador animarse; el segundo jugador no cambia de emote.
 - [ ] Buscar y reproducir un emote UGC autorizado. Documentar ID, propietario de la experiencia y resultado; los permisos dependen del asset.
 - [ ] Probar R6: mensaje claro, sin pistas fantasma.
 - [ ] Instalar mediante Rojo en lugar del modelo y repetir la prueba básica.
@@ -32,7 +32,7 @@ Estas pruebas requieren Roblox Studio y están **pendientes de ejecución real**
 - [ ] Introducir ID de accesorio, ID inexistente y asset restringido: mensajes claros, sin bloquear la UI.
 - [ ] Simular catálogo lento/no disponible: timeout recuperable, destacados accesibles, reintento.
 - [ ] Cargar hasta 120 resultados; nueva búsqueda reinicia la lista y no duplica tarjetas.
-- [ ] Verificar que no se compran artículos ni se modifica la cuenta de Roblox.
+- [ ] Verificar que abrir el hub, seleccionar, equipar o marcar favoritos no abre avisos ni compra artículos. Solo Comprar debe abrir el prompt oficial; no confirmar gastos no deseados.
 
 ## Teléfono y GUI
 
@@ -43,7 +43,7 @@ En Device Emulator, probar 360×640, 390×844, tablet y teléfono en horizontal;
 - [ ] Slider con un dedo; joystick con otro. Soltar fuera del slider recupera el desplazamiento.
 - [ ] Arrastrar la cabecera a cada borde; la ventana queda dentro de la zona segura.
 - [ ] Girar la pantalla con el panel abierto y el icono minimizado: queda dentro de pantalla.
-- [ ] Minimizar conserva el emote y muestra el icono circular FE. Tocarlo restaura el panel; arrastrarlo no lo abre.
+- [ ] Minimizar conserva el emote y muestra el cuadrado lateral FE. Tocarlo restaura el panel; arrastrarlo no lo abre.
 - [ ] Abrir controles con ≡ y plegarlos repetidamente: no desaparecen por un callback anterior.
 - [ ] Minimizar/abrir/cerrar rápidamente: ningún tween tardío oculta la ventana reabierta.
 - [ ] Cerrar detiene el emote y deja el botón FE para reabrir; no interfiere con el teclado.
@@ -59,7 +59,7 @@ En Device Emulator, probar 360×640, 390×844, tablet y teléfono en horizontal;
 - [ ] Probar con el sistema de combate/animaciones real del juego; animaciones de prioridad superior pueden sustituir visualmente los emotes.
 - [ ] Salir y volver a entrar: los accesos se reinician (sin DataStore, comportamiento documentado).
 
-## NOIR: favoritos y animaciones (verificación real pendiente)
+## Glass: favoritos y animaciones (verificación real pendiente)
 
 - [ ] Marcar ☆ en una tarjeta; Favoritos muestra la misma miniatura y nombre. ★ lo retira sin quitarlo del catálogo ni de Equipados.
 - [ ] Guardar favoritos UGC/oficiales, navegar otras páginas y cambiar búsquedas: la colección permanece.
@@ -73,3 +73,21 @@ En Device Emulator, probar 360×640, 390×844, tablet y teléfono en horizontal;
 - [ ] Abrir/cerrar 30 veces, cambiar pestañas y recrear GUI: sin conexiones, tweens o pistas acumulándose.
 - [ ] Arrastrar el icono a las cuatro esquinas y girar el teléfono: siempre se puede volver a tocar.
 - [ ] Al cerrar o minimizar con el teclado abierto, se cierra el teclado y se puede recuperar el hub.
+
+## Inicio cerrado, ficha y compra oficial (pruebas reales pendientes)
+
+- [ ] Ejecutar: solo aparece un cuadrado FE lateral de 48 × 48 con UICorner; no se abre el panel ni se consulta SearchCatalog automáticamente.
+- [ ] Primer toque: apertura con escala/fundido y consulta del catálogo. Cerrar y abrir no repite búsquedas innecesarias.
+- [ ] Las superficies glass son translúcidas; Lighting y efectos globales del juego permanecen intactos.
+- [ ] Tarjetas 1:1 en 360×640, 390×844 y horizontal, con miniaturas/nombres legibles.
+- [ ] Tocar una tarjeta abre una ficha sin iniciar reproducción ni compra; se ve el emote sobre un cuadrado negro.
+- [ ] Desplegar reproduce exactamente el ID seleccionado. Cerrar la ficha no detiene una pista que ya estaba sonando.
+- [ ] Comprar solo abre el aviso oficial del ID seleccionado; cancelar no concede el artículo ni inicia reproducción.
+- [ ] Artículo gratuito, ya adquirido, fuera de venta y consulta fallida: precio/estado correcto y habilitación adecuada de Comprar.
+- [ ] Pulsar Comprar repetidamente no abre varios avisos.
+- [ ] No se da por procesada una compra solo por el evento de cierre; se vuelve a comprobar propiedad.
+- [ ] Cambiar de selección o cerrar durante la consulta descarta respuestas obsoletas y prompts aún no abiertos.
+- [ ] Un aviso oficial ya visible se cancela desde Roblox, incluso si minimizas o cierras el hub.
+- [ ] Fallo de PromptPurchase o restricciones de venta: error claro, sin reintentos de compra automáticos.
+- [ ] Girar la pantalla: acceso sigue en un lateral, preview cuadrado y ambos botones de la ficha accesibles.
+- [ ] Ejecutar dos veces vuelve a mostrar solo FE y mantiene los favoritos de la sesión.

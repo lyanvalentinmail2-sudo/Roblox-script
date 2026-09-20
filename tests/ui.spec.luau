@@ -3,10 +3,78 @@ local gui = assert(playerGui:FindFirstChild("FEEmotesGui"))
 local panel = find(gui, "Panel")
 local icon = find(gui, "Reopen")
 local navigation = find(gui, "LibraryNavigation")
-check(panel.Visible and not icon.Visible and panel.GroupTransparency == 0, "UI: entrada visible")
+check(
+	not panel.Visible and icon.Visible and panel.GroupTransparency == 1,
+	"UI: inicia solo con acceso lateral"
+)
+check(icon.Size.X.Offset == 48 and icon.Size.Y.Offset == 48, "UI: acceso cuadrado pequeño")
+check(icon:FindFirstChildOfClass("UICorner").CornerRadius.Offset == 12, "UI: acceso con esquinas redondeadas")
+check(catalogCalls == 0 and #officialPrompts == 0, "UI: inicio no consulta catálogo ni abre compras")
+check(
+	panel.BackgroundTransparency > 0 and find(panel, "GlassSheen") ~= nil,
+	"UI: superficies glass sin modificar Lighting"
+)
+click(icon, 0.4)
+check(panel.Visible and not icon.Visible and panel.GroupTransparency == 0, "UI: apertura animada al tocar")
+check(catalogCalls == 1, "UI: catálogo se consulta al abrir por primera vez")
+local layout = find(gui, "SquareLayout")
+check(layout.CellSize.X.Offset == layout.CellSize.Y.Offset, "UI: tarjetas de emote cuadradas")
 check(panel.BackgroundColor3.R < 0.03 and panel.BackgroundColor3.G < 0.03, "UI: fondo negro")
 check(tweenCount > 0, "UI: usa tweens reales del adaptador")
 local first = find(gui, "Emote_123")
+local requestsBefore = #requests
+click(find(first, "SelectEmote"), 0.4)
+local detailOverlay = find(gui, "EmoteDetailsOverlay")
+check(detailOverlay.Visible and #requests == requestsBefore, "UI: tocar tarjeta abre ficha sin reproducir")
+check(#officialPrompts == 0, "UI: abrir ficha no inicia una compra")
+local preview = find(gui, "BlackEmoteSquare")
+check(
+	preview.Size.X.Offset == preview.Size.Y.Offset and preview.BackgroundColor3.R == 0,
+	"UI: miniatura sobre cuadrado negro"
+)
+check(
+	find(gui, "DeployEmote").Text == "Desplegar" and find(gui, "BuyEmote").Text == "Comprar",
+	"UI: las dos acciones solicitadas"
+)
+check(find(gui, "EmotePrice").Text == "50 Robux", "UI: precio de MarketplaceService")
+click(find(gui, "BuyEmote"), 0.1)
+check(
+	#officialPrompts == 1 and officialPrompts[1].id == 123,
+	"UI: Comprar abre prompt oficial del emote elegido"
+)
+click(find(gui, "BuyEmote"), 0.1)
+check(#officialPrompts == 1, "UI: pulsaciones repetidas no duplican prompts")
+market.PromptPurchaseFinished:Fire(localPlayer, 123, false)
+advance(0.1)
+check(find(gui, "BuyEmote").Active, "UI: cancelar permite reintentar")
+click(find(gui, "DeployEmote"), 0.4)
+check(
+	requests[#requests].action == "Play" and requests[#requests].id == 123,
+	"UI: Desplegar reproduce el emote seleccionado"
+)
+check(not detailOverlay.Visible, "UI: desplegar cierra la ficha")
+click(find(first, "SelectEmote"), 0.4)
+click(find(gui, "CloseDetails"), 0)
+click(find(first, "SelectEmote"), 0.4)
+check(
+	detailOverlay.Visible and find(gui, "EmoteDetailsCard").GroupTransparency == 0,
+	"UI: reapertura de ficha ignora cierre tardío"
+)
+click(find(gui, "CloseDetails"), 0.3)
+viewport = vector(740, 320)
+find(gui, "SafeArea"):GetPropertyChangedSignal("AbsoluteSize"):Fire()
+advance(0.3)
+check(icon.Position.X.Offset == 684, "UI: acceso sigue en el lateral al girar pantalla")
+check(
+	preview.Size.X.Offset == preview.Size.Y.Offset and preview.Size.Y.Offset <= 100,
+	"UI: ficha compacta en horizontal"
+)
+check(layout.CellSize.X.Offset == layout.CellSize.Y.Offset, "UI: cuadrícula sigue cuadrada tras girar")
+viewport = vector(390, 740)
+find(gui, "SafeArea"):GetPropertyChangedSignal("AbsoluteSize"):Fire()
+advance(0.3)
+check(icon.Position.X.Offset == 334, "UI: vuelve al lateral en vertical")
+
 click(find(first, "Favorite"), 0.4)
 check(find(first, "Favorite").Text == "★", "UI: estrella activada")
 check(playerGui:GetAttribute("FEEmotesFavoritesV1") ~= nil, "UI: favoritos guardados en sesión")
@@ -89,6 +157,7 @@ advance(0)
 click(icon, 0)
 check(not panel.Visible, "UI: arrastrar el icono no abre el panel")
 advance(0.3)
+check(icon.Position.X.Offset == 8 or icon.Position.X.Offset == 334, "UI: el acceso se ajusta a un lateral")
 click(icon, 0.4)
 check(panel.Visible, "UI: el siguiente toque tras arrastrar sí abre")
 localPlayer.CharacterAdded:Fire()

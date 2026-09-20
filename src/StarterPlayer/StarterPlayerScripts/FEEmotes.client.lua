@@ -1,10 +1,11 @@
--- FE Emotes / NOIR • hub negro, biblioteca personal y transiciones táctiles.
+-- FE Emotes / GLASS • catálogo cuadrado, ficha de emote y acceso lateral.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local AvatarEditorService = game:GetService("AvatarEditorService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -20,6 +21,7 @@ local Config = require(shared:WaitForChild("Config"))
 local Validation = require(shared:WaitForChild("Validation"))
 local Favorites = require(shared:WaitForChild("Favorites"))
 local HubState = require(shared:WaitForChild("HubState"))
+local EmoteDetails = require(shared:WaitForChild("EmoteDetails"))
 local remote = shared:WaitForChild("Request", 15)
 if not remote then
 	warn("[FE Emotes] Falta el Script del servidor. Consulta README.md.")
@@ -98,6 +100,7 @@ end
 local function button(parent, value, props)
 	local options = {
 		BackgroundColor3 = C.elevated,
+		BackgroundTransparency = 0.16,
 		BorderSizePixel = 0,
 		Text = value,
 		TextColor3 = C.text,
@@ -111,7 +114,7 @@ local function button(parent, value, props)
 	end
 	local object = make("TextButton", options, parent)
 	rounded(object, 12)
-	if options.Name ~= "SpeedSlider" then
+	if options.Name ~= "SpeedSlider" and options.Name ~= "EmoteDetailsOverlay" then
 		local scale = make("UIScale", { Scale = 1 }, object)
 		-- Conexiones propiedad del botón: Destroy las libera junto con la tarjeta.
 		object.MouseEnter:Connect(function()
@@ -152,7 +155,9 @@ local safe = make("Frame", {
 }, gui)
 local panel = make("CanvasGroup", {
 	Name = "Panel",
+	Visible = false,
 	GroupTransparency = 1,
+	BackgroundTransparency = 0.28,
 	BackgroundColor3 = C.background,
 	BorderSizePixel = 0,
 	Size = UDim2.fromOffset(440, 740),
@@ -160,7 +165,26 @@ local panel = make("CanvasGroup", {
 }, safe)
 local panelScale = make("UIScale", { Scale = 1 }, panel)
 rounded(panel, 22)
-stroke(panel)
+local glassBorder = stroke(panel, C.accent)
+glassBorder.Transparency = 0.7
+-- Cristal simulado con transparencias, reflejos y bordes; no se altera Lighting.
+local sheen = make("Frame", {
+	Name = "GlassSheen",
+	BackgroundColor3 = C.text,
+	BackgroundTransparency = 0.9,
+	Size = UDim2.fromScale(1, 1),
+	BorderSizePixel = 0,
+	Active = false,
+}, panel)
+rounded(sheen, 22)
+make("UIGradient", {
+	Rotation = 115,
+	Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.2),
+		NumberSequenceKeypoint.new(0.5, 1),
+		NumberSequenceKeypoint.new(1, 0.65),
+	}),
+}, sheen)
 local accent = make("Frame", {
 	BackgroundColor3 = C.accent,
 	BorderSizePixel = 0,
@@ -184,7 +208,7 @@ text(
 )
 text(
 	header,
-	"NOIR EDITION  /  TU RITMO",
+	"GLASS EDITION  /  TU AVATAR",
 	10,
 	C.muted,
 	{ Position = UDim2.fromOffset(0, 31), Size = UDim2.new(1, 0, 0, 16) }
@@ -194,6 +218,7 @@ local close = button(panel, "×", { TextSize = 24, Position = UDim2.new(1, -54, 
 
 local navigation = make("Frame", {
 	Name = "LibraryNavigation",
+	BackgroundTransparency = 0.24,
 	Position = UDim2.fromOffset(14, 68),
 	Size = UDim2.new(1, -28, 0, 48),
 	BackgroundColor3 = C.surface,
@@ -248,7 +273,7 @@ local function section(height, surface)
 		LayoutOrder = order,
 		BorderSizePixel = 0,
 		BackgroundColor3 = C.surface,
-		BackgroundTransparency = surface and 0 or 1,
+		BackgroundTransparency = surface and 0.24 or 1,
 	}, body)
 	if surface then
 		rounded(frame)
@@ -381,7 +406,7 @@ local collectionTitle = text(browseTitle, "Encuentra tu ritmo.", 19, C.text, {
 	Size = UDim2.new(1, -50, 0, 25),
 	Font = Enum.Font.GothamBold,
 })
-local collectionHint = text(browseTitle, "Toca ▶ para bailar o ☆ para guardar.", 11, C.muted, {
+local collectionHint = text(browseTitle, "Toca un emote para desplegarlo o comprarlo.", 11, C.muted, {
 	Position = UDim2.fromOffset(0, 48),
 	Size = UDim2.new(1, 0, 0, 16),
 })
@@ -426,8 +451,11 @@ for i, name in ipairs({ "Todos", "UGC", "Roblox" }) do
 		button(tabsSection, name, { Size = UDim2.new(1 / 3, -4, 1, 0), TextSize = 12, LayoutOrder = i })
 end
 local grid = section(0, false)
-make("UIGridLayout", {
-	CellSize = UDim2.new(0.5, -5, 0, 216),
+grid.Name = "EmoteGrid"
+local gridLayout = make("UIGridLayout", {
+	Name = "SquareLayout",
+	FillDirectionMaxCells = 2,
+	CellSize = UDim2.fromOffset(150, 150),
 	CellPadding = UDim2.fromOffset(10, 10),
 	SortOrder = Enum.SortOrder.LayoutOrder,
 }, grid)
@@ -457,16 +485,114 @@ local status = text(panel, "Listo · R15 recomendado", 11, C.muted, {
 	Size = UDim2.new(1, -32, 0, 34),
 	TextWrapped = true,
 })
+local detailUI = { revision = 0 }
+detailUI.overlay = button(panel, "", {
+	Name = "EmoteDetailsOverlay",
+	Size = UDim2.fromScale(1, 1),
+	Visible = false,
+	BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+	BackgroundTransparency = 0.3,
+	ZIndex = 20,
+})
+detailUI.card = make("CanvasGroup", {
+	Name = "EmoteDetailsCard",
+	Active = true,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(380, 430),
+	BackgroundColor3 = C.surface,
+	BackgroundTransparency = 0.08,
+	BorderSizePixel = 0,
+	GroupTransparency = 1,
+	ClipsDescendants = true,
+}, detailUI.overlay)
+rounded(detailUI.card, 18)
+stroke(detailUI.card, C.accent).Transparency = 0.7
+detailUI.scale = make("UIScale", { Scale = 1 }, detailUI.card)
+text(detailUI.card, "EMOTE SELECCIONADO", 11, C.muted, {
+	Position = UDim2.fromOffset(16, 12),
+	Size = UDim2.new(1, -76, 0, 32),
+})
+detailUI.close =
+	button(detailUI.card, "×", { Name = "CloseDetails", Position = UDim2.new(1, -54, 0, 6), TextSize = 24 })
+detailUI.body = make("ScrollingFrame", {
+	Name = "DetailsContent",
+	Position = UDim2.fromOffset(14, 58),
+	Size = UDim2.new(1, -28, 1, -130),
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	CanvasSize = UDim2.new(),
+	AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	ScrollingDirection = Enum.ScrollingDirection.Y,
+	ScrollBarThickness = 3,
+	ScrollBarImageColor3 = C.muted,
+}, detailUI.card)
+detailUI.content =
+	make("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -6, 0, 334) }, detailUI.body)
+detailUI.preview = make("Frame", {
+	Name = "BlackEmoteSquare",
+	BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+	BorderSizePixel = 0,
+	Size = UDim2.fromOffset(188, 188),
+	Position = UDim2.new(0.5, 0, 0, 0),
+	AnchorPoint = Vector2.new(0.5, 0),
+}, detailUI.content)
+rounded(detailUI.preview, 12)
+stroke(detailUI.preview)
+detailUI.image = make("ImageLabel", {
+	Name = "SelectedEmoteImage",
+	BackgroundTransparency = 1,
+	Size = UDim2.new(1, -16, 1, -16),
+	Position = UDim2.fromOffset(8, 8),
+	Image = "",
+	ScaleType = Enum.ScaleType.Fit,
+}, detailUI.preview)
+detailUI.name = text(
+	detailUI.content,
+	"Emote",
+	17,
+	C.text,
+	{ Name = "SelectedEmoteName", TextXAlignment = Enum.TextXAlignment.Center }
+)
+detailUI.creator = text(detailUI.content, "", 11, C.muted, { TextXAlignment = Enum.TextXAlignment.Center })
+detailUI.price = text(
+	detailUI.content,
+	"Consultar disponibilidad",
+	14,
+	C.text,
+	{ Name = "EmotePrice", TextXAlignment = Enum.TextXAlignment.Center }
+)
+detailUI.message = text(
+	detailUI.content,
+	"",
+	11,
+	C.muted,
+	{ Name = "PurchaseMessage", TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center }
+)
+detailUI.deploy = button(detailUI.card, "Desplegar", {
+	Name = "DeployEmote",
+	Position = UDim2.new(0, 14, 1, -62),
+	Size = UDim2.new(0.5, -19, 0, 48),
+	BackgroundColor3 = C.selected,
+	TextColor3 = C.background,
+})
+detailUI.buy = button(detailUI.card, "Comprar", {
+	Name = "BuyEmote",
+	Position = UDim2.new(0.5, 5, 1, -62),
+	Size = UDim2.new(0.5, -19, 0, 48),
+	BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+})
+stroke(detailUI.buy)
 local launcher = button(safe, "FE", {
 	Name = "Reopen",
-	Size = UDim2.fromOffset(60, 60),
-	Position = UDim2.fromOffset(16, 18),
-	Visible = false,
+	Size = UDim2.fromOffset(48, 48),
+	Position = UDim2.new(1, -56, 0.34, 0),
+	Visible = true,
 	BackgroundColor3 = C.background,
-	TextSize = 21,
+	TextSize = 17,
 	Font = Enum.Font.GothamBold,
 })
-launcher:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(1, 0)
+launcher:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0, 12)
 local launcherRing = stroke(launcher, C.accent)
 launcherRing.Transparency = 0.15
 local launcherDot = make("Frame", {
@@ -477,11 +603,7 @@ local launcherDot = make("Frame", {
 	BorderSizePixel = 0,
 }, launcher)
 rounded(launcherDot, 5)
-text(launcher, "↗", 11, C.muted, {
-	Position = UDim2.fromOffset(22, 40),
-	Size = UDim2.fromOffset(16, 16),
-	TextXAlignment = Enum.TextXAlignment.Center,
-})
+
 local windowState = HubState.new()
 local favorites = Favorites.new(Validation, 120)
 local favoritesKey = "FEEmotesFavoritesV1"
@@ -500,6 +622,7 @@ local selectedView = "Catálogo"
 local viewQueries = { ["Catálogo"] = "", Favoritos = "", Equipados = "" }
 local localSearchRevision = 0
 local lastIconDrag = -math.huge
+local launcherOnLeft = false
 
 local state = { equipped = {}, speed = 1, locked = false, paused = false, loading = false }
 local items = table.clone(Config.Featured)
@@ -508,7 +631,8 @@ local catalogPages = nil
 local searching = false
 local searchRevision = 0
 local lastSearch = -math.huge
-local closed = false
+local closed = true
+local catalogStarted = false
 local destroyed = false
 local sliderInput = nil
 local settingsVersion = 0
@@ -557,6 +681,71 @@ local function play(id)
 	flushSettings()
 	request("Play", id)
 end
+local details = EmoteDetails.new(MarketplaceService, player, Validation, function(snapshot)
+	if destroyed or not snapshot.item then
+		return
+	end
+	detailUI.item = snapshot.item
+	detailUI.name.Text = snapshot.item.Name or "Emote"
+	detailUI.creator.Text = snapshot.item.Creator or "Creador"
+	if snapshot.loading then
+		detailUI.price.Text = "Consultando…"
+	elseif snapshot.owned then
+		detailUI.price.Text = "En tu inventario"
+	elseif snapshot.forSale == false then
+		detailUI.price.Text = "Fuera de venta"
+	elseif snapshot.price ~= nil then
+		detailUI.price.Text = snapshot.price == 0 and "Gratis" or tostring(snapshot.price) .. " Robux"
+	else
+		detailUI.price.Text = "Precio no disponible"
+	end
+	detailUI.message.Text = snapshot.message or "Confirma cualquier compra en la ventana oficial de Roblox."
+	detailUI.message.TextColor3 = snapshot.isError and C.error or C.muted
+	local enabled = snapshot.canBuy and not snapshot.purchasing
+	detailUI.buy.Active = enabled
+	detailUI.buy.Selectable = enabled
+	detailUI.buy.TextTransparency = enabled and 0 or 0.5
+	detailUI.buy.BackgroundTransparency = enabled and 0 or 0.45
+end)
+local function closeDetails()
+	detailUI.revision = detailUI.revision + 1
+	local token = detailUI.revision
+	detailUI.item = nil
+	details:clear()
+	tween(detailUI.card, { GroupTransparency = 1 }, 0.15)
+	task.delay(0.16, function()
+		if not destroyed and detailUI.revision == token then
+			detailUI.overlay.Visible = false
+		end
+	end)
+end
+local function openDetails(item)
+	if destroyed or windowState.mode ~= "open" then
+		return
+	end
+	detailUI.revision = detailUI.revision + 1
+	detailUI.item = item
+	detailUI.overlay.Visible = true
+	detailUI.image.Image = thumbnail(item.Id)
+	detailUI.body.CanvasPosition = Vector2.new(0, 0)
+	detailUI.scale.Scale = 0.94
+	tween(detailUI.scale, { Scale = 1 }, 0.28, Enum.EasingStyle.Back)
+	tween(detailUI.card, { GroupTransparency = 0 }, 0.2)
+	details:select(item)
+end
+connect(detailUI.close.Activated, closeDetails)
+connect(detailUI.overlay.Activated, closeDetails)
+connect(detailUI.deploy.Activated, function()
+	if not detailUI.item or destroyed then
+		return
+	end
+	local id = detailUI.item.Id
+	closeDetails()
+	play(id)
+end)
+connect(detailUI.buy.Activated, function()
+	details:purchase()
+end)
 local function paintControls()
 	speedValue.Text = string.format("%.2f×", state.speed)
 	local ratio = (state.speed - Config.MinSpeed) / (Config.MaxSpeed - Config.MinSpeed)
@@ -628,6 +817,12 @@ local function saveFavorites()
 	end
 end
 local renderCards
+local function updateGridSize()
+	local side = math.max(1, math.floor((grid.AbsoluteSize.X - 10) / 2))
+	gridLayout.CellSize = UDim2.fromOffset(side, side)
+	grid.Size = UDim2.new(1, 0, 0, math.max(0, math.ceil(#cards / 2) * (side + 10) - 10))
+end
+connect(grid:GetPropertyChangedSignal("AbsoluteSize"), updateGridSize)
 local function toggleFavorite(item, favoriteButton)
 	local ok, result = favorites:toggle(item)
 	if not ok then
@@ -672,6 +867,7 @@ renderCards = function(animate)
 			local card = make("Frame", {
 				Name = "Emote_" .. tostring(item.Id),
 				BackgroundColor3 = C.surface,
+				BackgroundTransparency = 0.2,
 				BorderSizePixel = 0,
 				LayoutOrder = count,
 				ClipsDescendants = true,
@@ -688,54 +884,52 @@ renderCards = function(animate)
 				end
 			end)
 			local image = make("ImageButton", {
-				Name = "Play",
-				Size = UDim2.new(1, -12, 0, 106),
-				Position = UDim2.fromOffset(6, 6),
-				BackgroundColor3 = C.elevated,
+				Name = "SelectEmote",
+				Size = UDim2.fromScale(1, 1),
+				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
 				Image = thumbnail(item.Id),
 				ScaleType = Enum.ScaleType.Fit,
 				AutoButtonColor = false,
 			}, card)
-			rounded(image, 10)
-			make(
-				"UIGradient",
-				{ Color = ColorSequence.new(C.text, Color3.fromRGB(110, 110, 116)), Rotation = 90 },
-				image
-			)
+			rounded(image, 14)
+			local caption = make("Frame", {
+				BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+				BackgroundTransparency = 0.18,
+				BorderSizePixel = 0,
+				Position = UDim2.new(0, 0, 1, -50),
+				Size = UDim2.new(1, 0, 0, 50),
+			}, image)
 			text(
-				image,
-				"▶",
-				20,
-				C.text,
-				{ Position = UDim2.new(1, -28, 1, -28), Size = UDim2.fromOffset(24, 24) }
-			)
-			text(
-				card,
+				caption,
 				item.Name,
-				13,
+				12,
 				C.text,
-				{ Position = UDim2.fromOffset(10, 118), Size = UDim2.new(1, -20, 0, 22) }
+				{ Position = UDim2.fromOffset(8, 5), Size = UDim2.new(1, -62, 0, 22) }
 			)
-			text(card, item.IsRoblox and "ROBLOX ORIGINAL" or "UGC · " .. item.Creator, 9, C.muted, {
-				Position = UDim2.fromOffset(10, 141),
-				Size = UDim2.new(1, -20, 0, 16),
-			})
+			text(
+				caption,
+				item.IsRoblox and "ROBLOX" or "UGC",
+				9,
+				C.muted,
+				{ Position = UDim2.fromOffset(8, 29), Size = UDim2.new(1, -62, 0, 15) }
+			)
 			local equipped = isEquipped(item.Id)
-			local equip = button(card, equipped and "✓ Quitar" or "+ Equipar", {
+			local equip = button(card, equipped and "✓" or "+", {
 				Name = "Equip",
-				Position = UDim2.fromOffset(6, 166),
-				Size = UDim2.new(1, -62, 0, 44),
-				TextSize = 11,
+				Position = UDim2.new(1, -48, 1, -48),
+				Size = UDim2.fromOffset(44, 44),
+				TextSize = 21,
 				BackgroundColor3 = equipped and C.selected or C.elevated,
 				TextColor3 = equipped and C.background or C.text,
 			})
 			local favoriteButton = button(card, favorites:contains(item.Id) and "★" or "☆", {
 				Name = "Favorite",
-				Position = UDim2.new(1, -50, 0, 166),
+				Position = UDim2.new(1, -48, 0, 4),
 				Size = UDim2.fromOffset(44, 44),
 				TextSize = 23,
-				BackgroundColor3 = C.elevated,
+				BackgroundColor3 = C.background,
+				BackgroundTransparency = 0.2,
 				TextColor3 = favorites:contains(item.Id) and C.text or C.muted,
 			})
 			image.MouseEnter:Connect(function()
@@ -745,7 +939,7 @@ renderCards = function(animate)
 				tween(border, { Transparency = 0.3 }, 0.18)
 			end)
 			image.Activated:Connect(function()
-				play(item.Id)
+				openDetails(item)
 			end)
 			equip.Activated:Connect(function()
 				request("Equip", item.Id)
@@ -773,12 +967,12 @@ renderCards = function(animate)
 				and "☆  Tu colección empieza aquí.\nMarca la estrella de cualquier emote para guardarlo."
 			or "No hay favoritos con ese nombre.\nPrueba otro nombre, creador o ID."
 	elseif selectedView == "Equipados" then
-		emptyText.Text = "Tus emotes, siempre a mano.\nToca + Equipar en el catálogo para añadirlos."
+		emptyText.Text = "Tus emotes, siempre a mano.\nToca + en el catálogo para añadirlos."
 	else
 		emptyText.Text = "No hay coincidencias en estas páginas.\nPrueba otra búsqueda o carga más emotes."
 	end
 	grid.Visible = count > 0
-	grid.Size = UDim2.new(1, 0, 0, math.ceil(count / 2) * 226 - (count > 0 and 10 or 0))
+	updateGridSize()
 	collectionCount.Text = string.format("%02d", count)
 	collectionEyebrow.Text = selectedView == "Favoritos" and "TU COLECCIÓN PERSONAL"
 		or (selectedView == "Equipados" and "LISTOS PARA REPRODUCIR" or "LA BIBLIOTECA")
@@ -788,7 +982,7 @@ renderCards = function(animate)
 			and (tostring(favorites:count()) .. " / 120 guardados · ★ para quitar")
 		or (
 			selectedView == "Equipados" and "Hasta 8 accesos rápidos. Sin perder tu ritmo."
-			or "Toca ▶ para bailar o ☆ para guardar."
+			or "Toca un emote para desplegarlo o comprarlo."
 		)
 	quick.Visible = #state.equipped > 0
 	for name, tab in pairs(tabs) do
@@ -836,7 +1030,7 @@ local function renderSlots()
 			if item then
 				play(item.Id)
 			else
-				notify("Toca + Equipar en una tarjeta para ocupar este espacio.")
+				notify("Toca + en una tarjeta para ocupar este espacio.")
 			end
 		end)
 	end
@@ -865,7 +1059,7 @@ local function searchCatalog(nextPage)
 	local query = searchBox.Text:sub(1, 100):match("^%s*(.-)%s*$")
 	local directId = Validation.parseId(query)
 	if directId and not nextPage then
-		play(directId)
+		openDetails({ Id = directId, Name = "Emote #" .. tostring(directId), Creator = "Catálogo" })
 		return
 	end
 	if nextPage and catalogPages and catalogPages.IsFinished then
@@ -939,7 +1133,7 @@ local function searchCatalog(nextPage)
 			catalogPages = nil
 		end
 		renderCards(selectedView == "Catálogo")
-		notify(tostring(#items) .. " emotes cargados · toca una imagen para reproducir")
+		notify(tostring(#items) .. " emotes · toca una tarjeta para ver sus opciones")
 	end)
 end
 
@@ -956,14 +1150,31 @@ local function resize()
 	if size.X < 1 or size.Y < 1 then
 		return
 	end
+	if activeTweens[launcher] then
+		activeTweens[launcher]:Cancel()
+	end
 	panel.Size = UDim2.fromOffset(math.min(440, size.X - 16), math.min(740, size.Y - 16))
+	detailUI.card.Size = UDim2.fromOffset(panel.Size.X.Offset - 24, math.min(430, panel.Size.Y.Offset - 24))
+	local side = math.min(
+		188,
+		math.max(80, detailUI.card.Size.X.Offset - 56),
+		math.max(88, detailUI.card.Size.Y.Offset - 242)
+	)
+	detailUI.preview.Size = UDim2.fromOffset(side, side)
+	detailUI.content.Size = UDim2.new(1, -6, 0, side + 150)
+	for index, field in ipairs({ "name", "creator", "price", "message" }) do
+		local y = side + ({ 10, 38, 64, 92 })[index]
+		detailUI[field].Position = UDim2.fromOffset(0, y)
+		detailUI[field].Size = UDim2.new(1, 0, 0, field == "message" and 48 or 24)
+	end
+	updateGridSize()
 	if not positioned then
 		clampPosition(panel, size.X - panel.Size.X.Offset - 16, (size.Y - panel.Size.Y.Offset) / 2)
-		clampPosition(launcher, size.X - 76, 18)
+		clampPosition(launcher, size.X - 56, math.floor(size.Y * 0.34))
 		positioned = true
 	else
 		clampPosition(panel, panel.Position.X.Offset, panel.Position.Y.Offset)
-		clampPosition(launcher, launcher.Position.X.Offset, launcher.Position.Y.Offset)
+		clampPosition(launcher, launcherOnLeft and 8 or size.X - 56, launcher.Position.Y.Offset)
 	end
 end
 -- Un solo gesto activo: arrastrar la ventana no secuestra el joystick ni otros dedos.
@@ -974,6 +1185,9 @@ local function draggable(handle, target)
 			input.UserInputType == Enum.UserInputType.MouseButton1
 			or input.UserInputType == Enum.UserInputType.Touch
 		then
+			if target == launcher and activeTweens[target] then
+				activeTweens[target]:Cancel()
+			end
 			drag = { input = input, origin = input.Position, position = target.Position, target = target }
 		end
 	end)
@@ -1030,6 +1244,9 @@ connect(UserInputService.InputEnded, function(input)
 	if drag and input == drag.input then
 		if drag.target == launcher and drag.moved then
 			lastIconDrag = os.clock()
+			launcherOnLeft = launcher.Position.X.Offset + 24 < safe.AbsoluteSize.X / 2
+			local edge = launcherOnLeft and 8 or math.max(8, safe.AbsoluteSize.X - 56)
+			tween(launcher, { Position = UDim2.fromOffset(edge, launcher.Position.Y.Offset) }, 0.18)
 		end
 		drag = nil
 	end
@@ -1048,9 +1265,13 @@ local function showPanel()
 	panel.Visible = true
 	panelScale.Scale = 1
 	resize()
-	panelScale.Scale = 0.96
+	panelScale.Scale = 0.9
 	tween(panelScale, { Scale = 1 }, 0.32, Enum.EasingStyle.Back)
 	tween(panel, { GroupTransparency = 0 }, 0.22)
+	if not catalogStarted then
+		catalogStarted = true
+		searchCatalog(false)
+	end
 end
 local function hidePanel(mode)
 	local ticket = windowState:set(mode)
@@ -1058,6 +1279,7 @@ local function hidePanel(mode)
 		return
 	end
 	closed = mode == "closed"
+	closeDetails()
 	if searchBox:IsFocused() then
 		searchBox:ReleaseFocus(false)
 	end
@@ -1145,6 +1367,7 @@ for name, tab in pairs(tabs) do
 	end)
 end
 local function selectView(name)
+	closeDetails()
 	viewQueries[selectedView] = searchBox.Text
 	selectedView = name
 	searchBox.Text = viewQueries[name]
@@ -1234,6 +1457,7 @@ connect(player.CharacterAdded, function()
 end)
 connect(gui.Destroying, function()
 	destroyed = true
+	details:Destroy()
 	windowState:destroy()
 	for object, animation in pairs(activeTweens) do
 		animation:Cancel()
@@ -1252,13 +1476,7 @@ renderCards(true)
 paintControls()
 task.defer(function()
 	if not destroyed then
-		showPanel()
+		resize()
 	end
 end)
 request("Sync")
-
-task.defer(function()
-	if not destroyed then
-		searchCatalog(false)
-	end
-end)

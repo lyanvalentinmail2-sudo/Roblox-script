@@ -30,7 +30,7 @@ def build():
     package = item(root, "Folder", "FEEmotes_Package")
     storage = item(package, "Folder", "ReplicatedStorage")
     shared = item(storage, "Folder", "FEEmotes")
-    for name in ("Config", "Validation", "Favorites", "HubState"):
+    for name in ("Config", "Validation", "Favorites", "HubState", "EmoteDetails"):
         item(shared, "ModuleScript", name, f"src/ReplicatedStorage/FEEmotes/{name}.lua")
     server = item(package, "Folder", "ServerScriptService")
     item(server, "Script", "FEEmotes", "src/ServerScriptService/FEEmotes.server.lua", disabled=True)
@@ -49,7 +49,7 @@ def main():
     if args.check:
         if not OUTPUT.exists() or OUTPUT.read_bytes() != content:
             raise SystemExit("Modelo desactualizado: ejecuta npm run package")
-        print("Modelo XML OK: las 6 fuentes coinciden; servidor desactivado para importación segura.")
+        print("Modelo XML OK: las 7 fuentes coinciden; servidor desactivado para importación segura.")
     else:
         OUTPUT.write_bytes(content)
         print(f"Generado {OUTPUT.name} ({len(content):,} bytes)")

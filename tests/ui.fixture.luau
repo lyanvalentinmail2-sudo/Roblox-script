@@ -54,6 +54,16 @@ local ColorSequence = {
 		return { ... }
 	end,
 }
+local NumberSequence = {
+	new = function(value)
+		return value
+	end,
+}
+local NumberSequenceKeypoint = {
+	new = function(time, value)
+		return { Time = time, Value = value }
+	end,
+}
 local TweenInfo = {
 	new = function(duration)
 		return { duration = duration }
@@ -69,6 +79,7 @@ local function enum(prefix)
 	})
 end
 Enum = enum("Enum")
+local viewport = vector(390, 740)
 local instances = {}
 local methods = {}
 local eventNames = {
@@ -82,7 +93,7 @@ local eventNames = {
 Instance = {}
 local function absoluteSize(object)
 	if object._properties.Name == "PlayerGui" then
-		return vector(390, 740)
+		return viewport
 	end
 	local parent = object._properties.Parent
 	local parentSize = parent and parent.AbsoluteSize or vector(390, 740)
@@ -232,8 +243,14 @@ function remote:FireServer(request)
 	end
 	self.OnClientEvent:Fire(table.clone(uiState))
 end
-local sharedModules =
-	{ Config = Config, Validation = Validation, Favorites = Favorites, HubState = HubState, Request = remote }
+local sharedModules = {
+	Config = Config,
+	Validation = Validation,
+	Favorites = Favorites,
+	HubState = HubState,
+	EmoteDetails = EmoteDetails,
+	Request = remote,
+}
 local tweenCount = 0
 local liveTweens = 0
 local jsonStore = {}
@@ -245,7 +262,26 @@ local input = {
 		return nil
 	end,
 }
+local catalogCalls = 0
+local officialPrompts = {}
+local market = { PromptPurchaseFinished = signal(), owned = false, forSale = true }
+function market:GetProductInfoAsync(id)
+	return {
+		AssetTypeId = Enum.AssetType.EmoteAnimation.Value,
+		Name = id == 123 and "Dance" or "Wave",
+		IsForSale = self.forSale,
+		PriceInRobux = 50,
+		Creator = { Name = "Creator", CreatorTargetId = 55, CreatorType = "User" },
+	}
+end
+function market:PlayerOwnsAssetAsync()
+	return self.owned
+end
+function market:PromptPurchase(player, id)
+	table.insert(officialPrompts, { player = player, id = id })
+end
 local uiServices = {
+	MarketplaceService = market,
 	Players = { LocalPlayer = localPlayer },
 	ReplicatedStorage = {
 		WaitForChild = function()
@@ -258,6 +294,7 @@ local uiServices = {
 	},
 	AvatarEditorService = {
 		SearchCatalogAsync = function()
+			catalogCalls = catalogCalls + 1
 			return {
 				IsFinished = true,
 				GetCurrentPage = function()

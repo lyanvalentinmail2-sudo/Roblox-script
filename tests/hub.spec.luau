@@ -52,7 +52,7 @@ restored:restore({ Version = 1, Items = {} })
 check(restored:count() == 0, "guardar colección vacía")
 
 local hub = HubState.new()
-check(hub.mode == "open", "ventana inicial abierta")
+check(hub.mode == "minimized", "ventana inicial cerrada con acceso lateral")
 local minimize = hub:set("minimized")
 check(hub.mode == "minimized" and hub:current(minimize), "minimizar")
 local reopen = hub:set("open")
