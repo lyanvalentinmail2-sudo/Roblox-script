@@ -1,0 +1,17 @@
+{
+  "name": "FE Emotes",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "FEEmotes": { "$path": "src/ReplicatedStorage/FEEmotes" }
+    },
+    "ServerScriptService": {
+      "FEEmotes": { "$path": "src/ServerScriptService/FEEmotes.server.lua" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "FEEmotes": { "$path": "src/StarterPlayer/StarterPlayerScripts/FEEmotes.client.lua" }
+      }
+    }
+  }
+}
