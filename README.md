@@ -2,7 +2,16 @@
 
 **Tu avatar. Tu ritmo.** Un sistema de emotes para tu propia experiencia de Roblox, con interfaz oscura, acentos violeta y controles pensados para teléfono.
 
-> Se instala en **Roblox Studio**, no en un ejecutor. “FE” significa que la reproducción se realiza mediante un `Animator` del servidor para que se replique a los demás jugadores. No es un script universal para juegos ajenos, no desactiva FilteringEnabled y no elude compras o permisos de Roblox.
+## Elige la versión
+
+| Versión | Archivo | Uso |
+| --- | --- | --- |
+| **Archivo único para ejecutores como Delta** | [`FEEmotes-Delta.lua`](FEEmotes-Delta.lua) | Copia el archivo completo en el editor del ejecutor. Sin instalar servidor. [Instrucciones](docs/DELTA.md). |
+| **Roblox Studio / tu experiencia** | [`FEEmotes.rbxmx`](FEEmotes.rbxmx) | Instalación cliente-servidor; instrucciones más abajo. |
+
+**Delta / modo local:** conserva la GUI y los controles, pero la compatibilidad real con Delta está pendiente de prueba. Necesita R15 y acceso a `GetObjects`. Que los demás vean el emote depende del juego, el Animator y los permisos de Roblox; **no se garantiza FE universal**. No desbloquea emotes restringidos ni compras.
+
+> El resto de esta guía describe la **versión de Studio**. En ella, “FE” significa que se usa un `Animator` del servidor para la replicación. La versión local no instala ese servidor ni modifica remotos del juego. Ninguna desactiva FilteringEnabled.
 
 ## Funciones
 
@@ -113,10 +122,11 @@ npm run format:check
 npm test
 ```
 
-- Compilación de sintaxis de los cuatro archivos con Luau (WASM).
+- Compilación de sintaxis de las fuentes y del archivo único para ejecutores con Luau (WASM).
 - Pruebas de validación, límites y clasificación de creadores.
 - Pruebas del servidor con dobles de servicios: reproducción, velocidad, congelación, movimiento, cancelación, timeout, equipados, permisos, R6, muerte y desconexión.
-- Verificación de que el modelo importable coincide exactamente con las fuentes.
+- 30 comprobaciones adicionales del controlador local: carga de catálogo, movimiento, ajustes, permisos, timeout, limpieza y reinyección.
+- Verificación de que el modelo importable y el archivo único coinciden exactamente con las fuentes.
 - GitHub Actions ejecuta estas comprobaciones en cada push y pull request.
 
 Después de editar fuentes:

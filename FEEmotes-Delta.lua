@@ -1,0 +1,1336 @@
+-- FE EMOTES · ARCHIVO ÚNICO / EJECUCIÓN LOCAL
+-- Generado por tools/standalone.py. No editar este archivo: modifica src/ y regenera.
+-- Pega TODO el archivo en tu entorno de ejecución Lua cliente.
+-- No requiere Studio, remotos del servidor, claves, descargas de código ni archivos auxiliares.
+-- Compatibilidad con Delta NO verificada en un dispositivo real.
+-- No garantiza replicación FE ni evita permisos, restricciones o moderación de Roblox.
+-- Necesita avatar R15 y acceso a GetObjects para extraer las animaciones de catálogo.
+
+-- FE Emotes • interfaz táctil, sin dependencias externas.
+local Players = game:GetService("Players")
+local AvatarEditorService = game:GetService("AvatarEditorService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local previousGui = playerGui:FindFirstChild("FEEmotesStandaloneGui")
+if previousGui then previousGui:Destroy() end
+local Config = (function()
+-- Configuración compartida. Los permisos se validan siempre en el servidor.
+return {
+	Title = "FE Emotes",
+	MinSpeed = 0.25,
+	MaxSpeed = 3,
+	SpeedStep = 0.25,
+	MaxEquipped = 8,
+	MaxCacheEntries = 128,
+	LoadTimeout = 15,
+	-- Catálogo inicial: IDs de emote del catálogo, NO IDs internos de animación.
+	Featured = {
+		{ Id = 3576686446, Name = "Hello", Creator = "Roblox", IsRoblox = true },
+		{ Id = 3576823880, Name = "Point2", Creator = "Roblox", IsRoblox = true },
+		{ Id = 3576968026, Name = "Shrug", Creator = "Roblox", IsRoblox = true },
+		{ Id = 3576747102, Name = "Applaud", Creator = "Roblox", IsRoblox = true },
+		{ Id = 3716636630, Name = "Tilt", Creator = "Roblox", IsRoblox = true },
+		{ Id = 3360689775, Name = "Salute", Creator = "Roblox", IsRoblox = true },
+	},
+}
+
+end)()
+local Validation = (function()
+-- Funciones puras: también se ejecutan en las pruebas fuera de Studio.
+local Validation = {}
+
+function Validation.assetId(value)
+	return type(value) == "number"
+		and value == value
+		and value > 0
+		and value <= 9007199254740991
+		and value % 1 == 0
+end
+
+function Validation.speed(value, minimum, maximum)
+	return type(value) == "number" and value == value and value >= minimum and value <= maximum
+end
+
+function Validation.parseId(text)
+	if type(text) ~= "string" then
+		return nil
+	end
+	local digits = text:match("^%s*(%d+)%s*$")
+		or text:match("^https://www%.roblox%.com/catalog/(%d+)")
+		or text:match("^https://www%.roblox%.com/[%a%-]+/catalog/(%d+)")
+	local id = tonumber(digits)
+	return Validation.assetId(id) and id or nil
+end
+
+function Validation.isRoblox(creatorId, creatorType)
+	-- Los grupos tienen IDs independientes: el grupo 1 no es el usuario Roblox.
+	return tonumber(creatorId) == 1 and (creatorType == "User" or creatorType == 1)
+end
+
+function Validation.consume(bucket, now, capacity, refill)
+	bucket.tokens = math.min(capacity, bucket.tokens + math.max(0, now - bucket.time) * refill)
+	bucket.time = now
+	if bucket.tokens < 1 then
+		return false
+	end
+	bucket.tokens = bucket.tokens - 1
+	return true
+end
+
+return Validation
+
+end)()
+local createController = (function()
+-- Controlador local. No usa remotos del juego ni altera otros jugadores.
+-- GetObjects depende del contexto de ejecución; nunca se parentan los assets cargados.
+return function(player, Config, Validation)
+	local MarketplaceService = game:GetService("MarketplaceService")
+	local changed = Instance.new("BindableEvent")
+	local controller = { Changed = changed.Event }
+	local state = {
+		equipped = {},
+		speed = 1,
+		locked = false,
+		paused = false,
+		loading = false,
+		settingsRevision = 0,
+	}
+	local destroyed = false
+	local revision = 0
+	local pendingLoads = 0
+	local track, stoppedConnection
+	local characterConnections = {}
+	local lifetimeConnections = {}
+	local cache, cacheOrder = {}, {}
+
+	local function emit(message, isError)
+		if destroyed then
+			return
+		end
+		changed:Fire({
+			active = state.active,
+			equipped = table.clone(state.equipped),
+			speed = state.speed,
+			locked = state.locked,
+			paused = state.paused,
+			loading = state.loading,
+			settingsRevision = state.settingsRevision,
+			message = message,
+			isError = isError == true,
+		})
+	end
+	local function clearTrack()
+		if stoppedConnection then
+			stoppedConnection:Disconnect()
+			stoppedConnection = nil
+		end
+		if track then
+			local previous = track
+			track = nil
+			previous:Stop(0.15)
+			task.delay(0.2, function()
+				previous:Destroy()
+			end)
+		end
+		state.active = nil
+	end
+	local function stop(message)
+		revision = revision + 1
+		state.loading = false
+		clearTrack()
+		emit(message)
+	end
+	local function humanoidFor(character)
+		if not character or character ~= player.Character then
+			return nil
+		end
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		return humanoid and humanoid.Health > 0 and humanoid or nil
+	end
+	local function moving(humanoid)
+		local root = humanoid.RootPart
+		return root
+			and Vector3.new(root.AssemblyLinearVelocity.X, 0, root.AssemblyLinearVelocity.Z).Magnitude > 1
+	end
+	local function resolve(id, animationRequired)
+		local entry = cache[id]
+		if not entry then
+			local ok, info = pcall(function()
+				return MarketplaceService:GetProductInfoAsync(id, Enum.InfoType.Asset)
+			end)
+			if not ok then
+				return nil, "No se pudo consultar el ID. Revisa tu conexión e inténtalo de nuevo."
+			end
+			if info.AssetTypeId ~= Enum.AssetType.EmoteAnimation.Value then
+				return nil, "Usa el ID de un emote del catálogo, no el de un accesorio o animación."
+			end
+			local creator = info.Creator or {}
+			entry = {
+				item = {
+					Id = id,
+					Name = info.Name,
+					Creator = creator.Name or "Creador",
+					IsRoblox = Validation.isRoblox(
+						creator.CreatorTargetId or creator.Id,
+						creator.CreatorType
+					),
+				},
+			}
+			cache[id] = entry
+			table.insert(cacheOrder, id)
+			while #cacheOrder > Config.MaxCacheEntries do
+				cache[table.remove(cacheOrder, 1)] = nil
+			end
+		end
+		if animationRequired and not entry.animation then
+			local ok, objects = pcall(function()
+				return game:GetObjects("rbxassetid://" .. tostring(id))
+			end)
+			if not ok or type(objects) ~= "table" then
+				return nil, "Este entorno no permite cargar el emote (GetObjects/permisos). Prueba otro."
+			end
+			local animationId
+			-- Solo leer AnimationId; no insertar modelos, ejecutar scripts ni require(assetId).
+			for _, object in ipairs(objects) do
+				local animation = object:IsA("Animation") and object
+					or object:FindFirstChildWhichIsA("Animation", true)
+				if animation and animation.AnimationId ~= "" then
+					animationId = animation.AnimationId
+				end
+			end
+			for _, object in ipairs(objects) do
+				object:Destroy()
+			end
+			if not animationId then
+				return nil, "El asset no contiene una animación de emote compatible."
+			end
+			entry.animation = animationId
+		end
+		return entry
+	end
+	local function perform(action, id)
+		if state.loading or pendingLoads >= 2 then
+			emit("Espera a que termine la carga o pulsa detener.", true)
+			return
+		end
+		revision = revision + 1
+		local token = revision
+		local character = player.Character
+		local function current()
+			return not destroyed and revision == token and character == player.Character
+		end
+		state.loading = true
+		pendingLoads = pendingLoads + 1
+		emit(action == "Play" and "Cargando emote…" or "Equipando…")
+		task.delay(Config.LoadTimeout, function()
+			if current() and state.loading then
+				revision = revision + 1
+				state.loading = false
+				emit("La carga tardó demasiado. Puedes reintentar.", true)
+			end
+		end)
+		task.spawn(function()
+			local candidate
+			local ok, failure = pcall(function()
+				local entry, problem = resolve(id, action == "Play")
+				if not current() then
+					return
+				end
+				if not entry then
+					state.loading = false
+					emit(problem, true)
+					return
+				end
+				if action == "Equip" then
+					table.insert(state.equipped, entry.item)
+					state.loading = false
+					emit("Equipado en tu acceso rápido local.")
+					return
+				end
+				local humanoid = humanoidFor(character)
+				if not humanoid or humanoid.RigType ~= Enum.HumanoidRigType.R15 then
+					state.loading = false
+					emit("Necesitas un personaje R15 vivo.", true)
+					return
+				end
+				local animator = humanoid:FindFirstChildOfClass("Animator")
+				if not animator then
+					state.loading = false
+					emit("Tu personaje no tiene Animator. Espera a reaparecer y reintenta.", true)
+					return
+				end
+				local animation = Instance.new("Animation")
+				animation.AnimationId = entry.animation
+				local loaded, result = pcall(function()
+					return animator:LoadAnimation(animation)
+				end)
+				animation:Destroy()
+				if not loaded then
+					error("No se pudo cargar AnimationTrack")
+				end
+				candidate = result
+				local deadline = os.clock() + 8
+				while candidate.Length == 0 and current() and os.clock() < deadline do
+					task.wait(0.1)
+				end
+				if not current() then
+					return
+				end
+				if candidate.Length == 0 or not humanoidFor(character) then
+					error("La animación no está disponible o el personaje cambió")
+				end
+				if not state.locked and moving(humanoid) then
+					state.loading = false
+					emit("Detente o activa Mantener al moverte.", true)
+					return
+				end
+				clearTrack()
+				candidate.Priority = Enum.AnimationPriority.Action
+				candidate.Looped = true
+				candidate:Play(0.15, 1, state.paused and 0 or state.speed)
+				track, candidate = candidate, nil
+				state.active = entry.item
+				state.loading = false
+				local playing = track
+				stoppedConnection = track.Stopped:Connect(function()
+					if track == playing then
+						clearTrack()
+						emit("Emote finalizado.")
+					end
+				end)
+				emit("Reproducción local · visibilidad a otros no garantizada.")
+			end)
+			pendingLoads = pendingLoads - 1
+			if candidate then
+				candidate:Destroy()
+			end
+			if not ok and current() then
+				state.loading = false
+				warn("[FE Emotes / local]", failure)
+				emit("No se pudo reproducir. El juego o Roblox pueden restringir esta animación.", true)
+			end
+		end)
+	end
+	function controller:Dispatch(request)
+		if destroyed or type(request) ~= "table" then
+			return
+		end
+		local action = request.action
+		if action == "Sync" then
+			emit()
+		elseif action == "Stop" then
+			stop("Emote detenido.")
+		elseif action == "Settings" then
+			if
+				not Validation.speed(request.speed, Config.MinSpeed, Config.MaxSpeed)
+				or type(request.locked) ~= "boolean"
+				or type(request.paused) ~= "boolean"
+				or not Validation.assetId(request.settingsRevision)
+				or request.settingsRevision <= state.settingsRevision
+			then
+				return
+			end
+			state.speed, state.locked, state.paused = request.speed, request.locked, request.paused
+			state.settingsRevision = request.settingsRevision
+			if track then
+				track:AdjustSpeed(state.paused and 0 or state.speed)
+				local humanoid = humanoidFor(player.Character)
+				if not state.locked and humanoid and moving(humanoid) then
+					stop("Emote detenido al moverte.")
+					return
+				end
+			end
+			emit()
+		elseif (action == "Play" or action == "Equip") and Validation.assetId(request.id) then
+			if action == "Equip" then
+				if state.loading then
+					emit("Espera a que termine la carga.", true)
+					return
+				end
+				for i, item in ipairs(state.equipped) do
+					if item.Id == request.id then
+						table.remove(state.equipped, i)
+						emit("Emote retirado del acceso rápido.")
+						return
+					end
+				end
+				if #state.equipped >= Config.MaxEquipped then
+					emit("Retira un emote: los 8 espacios están ocupados.", true)
+					return
+				end
+			end
+			perform(action, request.id)
+		end
+	end
+	local function disconnectCharacter()
+		for _, connection in ipairs(characterConnections) do
+			connection:Disconnect()
+		end
+		characterConnections = {}
+	end
+	local function onCharacter(character)
+		disconnectCharacter()
+		stop()
+		local humanoid = character:WaitForChild("Humanoid", 10)
+		if destroyed or player.Character ~= character or not humanoid then
+			return
+		end
+		table.insert(
+			characterConnections,
+			humanoid.Running:Connect(function(speed)
+				if speed > 0.75 and track and not state.locked then
+					stop("Emote detenido al moverte.")
+				end
+			end)
+		)
+		table.insert(
+			characterConnections,
+			humanoid.StateChanged:Connect(function(_, newState)
+				if
+					track
+					and not state.locked
+					and (
+						newState == Enum.HumanoidStateType.Jumping
+						or newState == Enum.HumanoidStateType.Freefall
+						or newState == Enum.HumanoidStateType.Swimming
+					)
+				then
+					stop("Emote detenido al moverte.")
+				end
+			end)
+		)
+		table.insert(
+			characterConnections,
+			humanoid.Died:Connect(function()
+				stop()
+			end)
+		)
+	end
+	table.insert(lifetimeConnections, player.CharacterAdded:Connect(onCharacter))
+	table.insert(
+		lifetimeConnections,
+		player.CharacterRemoving:Connect(function()
+			disconnectCharacter()
+			stop()
+		end)
+	)
+	if player.Character then
+		task.spawn(onCharacter, player.Character)
+	end
+	function controller:Destroy()
+		if destroyed then
+			return
+		end
+		destroyed = true
+		revision = revision + 1
+		clearTrack()
+		disconnectCharacter()
+		for _, connection in ipairs(lifetimeConnections) do
+			connection:Disconnect()
+		end
+		changed:Destroy()
+	end
+	return controller
+end
+
+end)()
+local remote = createController(player, Config, Validation)
+
+local C = {
+	background = Color3.fromRGB(17, 18, 27),
+	surface = Color3.fromRGB(27, 28, 41),
+	elevated = Color3.fromRGB(37, 38, 54),
+	stroke = Color3.fromRGB(58, 58, 79),
+	text = Color3.fromRGB(246, 244, 255),
+	muted = Color3.fromRGB(164, 165, 188),
+	accent = Color3.fromRGB(167, 139, 250),
+	purple = Color3.fromRGB(111, 77, 220),
+	green = Color3.fromRGB(116, 231, 188),
+	error = Color3.fromRGB(255, 157, 174),
+}
+local connections = {}
+local function connect(signal, callback)
+	local connection = signal:Connect(callback)
+	table.insert(connections, connection)
+	return connection
+end
+local function make(class, props, parent)
+	local object = Instance.new(class)
+	for key, value in pairs(props) do
+		object[key] = value
+	end
+	object.Parent = parent
+	return object
+end
+local function rounded(object, radius)
+	make("UICorner", { CornerRadius = UDim.new(0, radius or 12) }, object)
+end
+local function stroke(object, color)
+	return make("UIStroke", { Color = color or C.stroke, Thickness = 1, Transparency = 0.3 }, object)
+end
+local function text(parent, value, size, color, props)
+	local options = {
+		BackgroundTransparency = 1,
+		Text = value,
+		TextSize = size or 14,
+		TextColor3 = color or C.text,
+		Font = Enum.Font.GothamMedium,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Size = UDim2.fromScale(1, 1),
+		RichText = false,
+	}
+	for key, valueOverride in pairs(props or {}) do
+		options[key] = valueOverride
+	end
+	return make("TextLabel", options, parent)
+end
+local function button(parent, value, props)
+	local options = {
+		BackgroundColor3 = C.elevated,
+		BorderSizePixel = 0,
+		Text = value,
+		TextColor3 = C.text,
+		TextSize = 14,
+		Font = Enum.Font.GothamMedium,
+		AutoButtonColor = true,
+		Size = UDim2.fromOffset(44, 44),
+	}
+	for key, override in pairs(props or {}) do
+		options[key] = override
+	end
+	local object = make("TextButton", options, parent)
+	rounded(object, 10)
+	return object
+end
+local function tween(object, props)
+	TweenService:Create(object, TweenInfo.new(0.18, Enum.EasingStyle.Quad), props):Play()
+end
+
+local gui = make("ScreenGui", {
+	Name = "FEEmotesStandaloneGui",
+	ResetOnSpawn = false,
+	DisplayOrder = 30,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
+}, playerGui)
+local safe = make("Frame", {
+	Name = "SafeArea",
+	BackgroundTransparency = 1,
+	Size = UDim2.fromScale(1, 1),
+}, gui)
+local panel = make("Frame", {
+	Name = "Panel",
+	BackgroundColor3 = C.background,
+	BorderSizePixel = 0,
+	Size = UDim2.fromOffset(440, 740),
+	ClipsDescendants = true,
+}, safe)
+rounded(panel, 20)
+stroke(panel)
+local accent = make("Frame", {
+	BackgroundColor3 = C.accent,
+	BorderSizePixel = 0,
+	Size = UDim2.new(1, 0, 0, 3),
+}, panel)
+make("UIGradient", { Color = ColorSequence.new(C.purple, C.green) }, accent)
+local header = make("Frame", {
+	Name = "DragHandle",
+	Active = true,
+	BackgroundTransparency = 1,
+	Position = UDim2.fromOffset(16, 9),
+	Size = UDim2.new(1, -128, 0, 54),
+}, panel)
+text(header, "FE", 23, C.accent, { Size = UDim2.fromOffset(36, 28), Font = Enum.Font.GothamBold })
+text(
+	header,
+	"Emotes",
+	23,
+	C.text,
+	{ Position = UDim2.fromOffset(40, 0), Size = UDim2.new(1, -40, 0, 28), Font = Enum.Font.GothamBold }
+)
+text(
+	header,
+	"MODO LOCAL · R15",
+	10,
+	C.muted,
+	{ Position = UDim2.fromOffset(0, 31), Size = UDim2.new(1, 0, 0, 16) }
+)
+local minimize = button(panel, "−", { TextSize = 24, Position = UDim2.new(1, -104, 0, 11) })
+local close = button(panel, "×", { TextSize = 24, Position = UDim2.new(1, -54, 0, 11) })
+
+local body = make("ScrollingFrame", {
+	Name = "Content",
+	Position = UDim2.fromOffset(14, 68),
+	Size = UDim2.new(1, -28, 1, -112),
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	ScrollBarThickness = 3,
+	ScrollBarImageColor3 = C.accent,
+	ScrollingDirection = Enum.ScrollingDirection.Y,
+	CanvasSize = UDim2.new(),
+	AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
+}, panel)
+make("UIPadding", { PaddingRight = UDim.new(0, 5), PaddingBottom = UDim.new(0, 8) }, body)
+make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10) }, body)
+local order = 0
+local function section(height, surface)
+	order = order + 1
+	local frame = make("Frame", {
+		Size = UDim2.new(1, 0, 0, height),
+		LayoutOrder = order,
+		BorderSizePixel = 0,
+		BackgroundColor3 = C.surface,
+		BackgroundTransparency = surface and 0 or 1,
+	}, body)
+	if surface then
+		rounded(frame)
+	end
+	return frame
+end
+
+local now = section(64, true)
+local activeImage = make("ImageLabel", {
+	BackgroundColor3 = C.elevated,
+	BorderSizePixel = 0,
+	Size = UDim2.fromOffset(48, 48),
+	Position = UDim2.fromOffset(8, 8),
+	Image = "",
+	ScaleType = Enum.ScaleType.Fit,
+}, now)
+rounded(activeImage, 10)
+local activeName = text(now, "Elige tu próximo emote", 14, C.text, {
+	Position = UDim2.fromOffset(66, 10),
+	Size = UDim2.new(1, -128, 0, 22),
+})
+local activeState = text(now, "UGC + clásicos de Roblox", 11, C.muted, {
+	Position = UDim2.fromOffset(66, 34),
+	Size = UDim2.new(1, -128, 0, 18),
+})
+local stopButton =
+	button(now, "■", { Position = UDim2.new(1, -54, 0, 10), TextColor3 = C.error, TextSize = 21 })
+
+local speedSection = section(66, false)
+text(speedSection, "VELOCIDAD", 10, C.muted, { Size = UDim2.new(0.5, 0, 0, 18) })
+local speedValue = text(speedSection, "1.00×", 13, C.accent, {
+	Position = UDim2.new(0.5, 0, 0, 0),
+	Size = UDim2.new(0.5, 0, 0, 18),
+	TextXAlignment = Enum.TextXAlignment.Right,
+})
+local minus = button(speedSection, "−", { Position = UDim2.fromOffset(0, 22), TextSize = 22 })
+local plus = button(speedSection, "+", { Position = UDim2.new(1, -44, 0, 22), TextSize = 22 })
+local slider = button(speedSection, "", {
+	Name = "SpeedSlider",
+	Position = UDim2.fromOffset(54, 22),
+	Size = UDim2.new(1, -108, 0, 44),
+	BackgroundTransparency = 1,
+})
+local rail = make("Frame", {
+	BackgroundColor3 = C.elevated,
+	BorderSizePixel = 0,
+	Position = UDim2.new(0, 10, 0.5, -3),
+	Size = UDim2.new(1, -20, 0, 6),
+}, slider)
+rounded(rail, 3)
+local fill =
+	make("Frame", { BackgroundColor3 = C.accent, BorderSizePixel = 0, Size = UDim2.fromScale(0.27, 1) }, rail)
+rounded(fill, 3)
+local knob = make("Frame", {
+	BackgroundColor3 = C.text,
+	BorderSizePixel = 0,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.27, 0.5),
+	Size = UDim2.fromOffset(20, 20),
+}, rail)
+rounded(knob, 10)
+local switches = section(52, false)
+local lockButton = button(switches, "", { Size = UDim2.new(0.5, -4, 1, 0) })
+local pauseButton =
+	button(switches, "", { Position = UDim2.new(0.5, 4, 0, 0), Size = UDim2.new(0.5, -4, 1, 0) })
+local lockTitle = text(
+	lockButton,
+	"○ Mantener",
+	13,
+	C.text,
+	{ Position = UDim2.fromOffset(10, 6), Size = UDim2.new(1, -20, 0, 20) }
+)
+text(
+	lockButton,
+	"No se quita al moverte",
+	10,
+	C.muted,
+	{ Position = UDim2.fromOffset(10, 29), Size = UDim2.new(1, -20, 0, 16) }
+)
+local pauseTitle = text(
+	pauseButton,
+	"Ⅱ Pausar pose",
+	13,
+	C.text,
+	{ Position = UDim2.fromOffset(10, 6), Size = UDim2.new(1, -20, 0, 20) }
+)
+text(
+	pauseButton,
+	"Congela el fotograma",
+	10,
+	C.muted,
+	{ Position = UDim2.fromOffset(10, 29), Size = UDim2.new(1, -20, 0, 16) }
+)
+
+local quick = section(80, false)
+local quickTitle = text(quick, "ACCESO RÁPIDO · 0/8", 10, C.muted, { Size = UDim2.new(1, 0, 0, 18) })
+local quickScroll = make("ScrollingFrame", {
+	Position = UDim2.fromOffset(0, 24),
+	Size = UDim2.new(1, 0, 0, 56),
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	CanvasSize = UDim2.new(),
+	AutomaticCanvasSize = Enum.AutomaticSize.X,
+	ScrollBarThickness = 2,
+	ScrollBarImageColor3 = C.accent,
+	ScrollingDirection = Enum.ScrollingDirection.X,
+}, quick)
+make("UIListLayout", {
+	FillDirection = Enum.FillDirection.Horizontal,
+	Padding = UDim.new(0, 8),
+	SortOrder = Enum.SortOrder.LayoutOrder,
+}, quickScroll)
+
+local browseTitle = section(24, false)
+text(browseTitle, "Descubre tu estilo", 18, C.text, { Font = Enum.Font.GothamBold })
+local searchSection = section(48, false)
+local searchBox = make("TextBox", {
+	Name = "Search",
+	Size = UDim2.new(1, -58, 1, 0),
+	BackgroundColor3 = C.surface,
+	BorderSizePixel = 0,
+	Text = "",
+	PlaceholderText = "Buscar nombre, ID o enlace…",
+	PlaceholderColor3 = C.muted,
+	TextColor3 = C.text,
+	Font = Enum.Font.Gotham,
+	TextSize = 13,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	ClearTextOnFocus = false,
+}, searchSection)
+rounded(searchBox)
+stroke(searchBox)
+make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 10) }, searchBox)
+local searchButton = button(
+	searchSection,
+	"Ir →",
+	{ Position = UDim2.new(1, -50, 0, 0), Size = UDim2.fromOffset(50, 48), BackgroundColor3 = C.purple }
+)
+local tabsSection = section(44, false)
+make("UIListLayout", {
+	FillDirection = Enum.FillDirection.Horizontal,
+	Padding = UDim.new(0, 6),
+	SortOrder = Enum.SortOrder.LayoutOrder,
+}, tabsSection)
+local tabs = {}
+for i, name in ipairs({ "Todos", "UGC", "Roblox", "Equipados" }) do
+	tabs[name] =
+		button(tabsSection, name, { Size = UDim2.new(0.25, -5, 1, 0), TextSize = 12, LayoutOrder = i })
+end
+local grid = section(0, false)
+make("UIGridLayout", {
+	CellSize = UDim2.new(0.5, -5, 0, 192),
+	CellPadding = UDim2.fromOffset(10, 10),
+	SortOrder = Enum.SortOrder.LayoutOrder,
+}, grid)
+local empty = section(56, true)
+local emptyText = text(
+	empty,
+	"No hay resultados. Prueba otra búsqueda.",
+	13,
+	C.muted,
+	{ TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center }
+)
+empty.Visible = false
+local moreSection = section(44, false)
+local more = button(moreSection, "Buscar en el catálogo de Roblox", { Size = UDim2.fromScale(1, 1) })
+local note = section(32, false)
+text(
+	note,
+	"Equipar no compra el artículo. Disponibilidad según Roblox.",
+	10,
+	C.muted,
+	{ TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center }
+)
+
+local status = text(panel, "Modo local · visibilidad a otros no garantizada", 11, C.muted, {
+	Position = UDim2.new(0, 16, 1, -40),
+	Size = UDim2.new(1, -32, 0, 34),
+	TextWrapped = true,
+})
+local mini = make("Frame", {
+	Name = "MiniPlayer",
+	Size = UDim2.fromOffset(286, 64),
+	BackgroundColor3 = C.background,
+	BorderSizePixel = 0,
+	Visible = false,
+	Active = true,
+}, safe)
+rounded(mini, 16)
+stroke(mini, C.accent)
+local miniOpen = button(
+	mini,
+	"",
+	{ Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -112, 0, 48), BackgroundTransparency = 1 }
+)
+text(miniOpen, "FE EMOTES  ↗", 10, C.accent, { Size = UDim2.new(1, 0, 0, 18) })
+local miniName = text(
+	miniOpen,
+	"Elige un emote",
+	12,
+	C.text,
+	{ Position = UDim2.fromOffset(0, 22), Size = UDim2.new(1, 0, 0, 20) }
+)
+local miniPause = button(mini, "Ⅱ", { Position = UDim2.new(1, -100, 0, 10), TextSize = 20 })
+local miniStop =
+	button(mini, "■", { Position = UDim2.new(1, -50, 0, 10), TextColor3 = C.error, TextSize = 20 })
+local launcher = button(safe, "FE", {
+	Name = "Reopen",
+	Size = UDim2.fromOffset(52, 52),
+	Position = UDim2.new(1, -64, 0, 18),
+	Visible = false,
+	BackgroundColor3 = C.purple,
+	TextSize = 18,
+	Font = Enum.Font.GothamBold,
+})
+stroke(launcher, C.accent)
+
+local state = { equipped = {}, speed = 1, locked = false, paused = false, loading = false }
+local items = table.clone(Config.Featured)
+local selectedTab = "Todos"
+local catalogPages = nil
+local searching = false
+local searchRevision = 0
+local lastSearch = -math.huge
+local closed = false
+local destroyed = false
+local sliderInput = nil
+local settingsVersion = 0
+local sentSettingsVersion = 0
+local slotsSignature = ""
+local cards = {}
+
+local function thumbnail(id)
+	return "rbxthumb://type=Asset&id=" .. tostring(id) .. "&w=150&h=150"
+end
+local function request(action, id)
+	remote:Dispatch({ action = action, id = id })
+end
+local function notify(message, isError)
+	status.Text = message
+	status.TextColor3 = isError and C.error or C.muted
+end
+local function isEquipped(id)
+	for _, item in ipairs(state.equipped) do
+		if item.Id == id then
+			return true
+		end
+	end
+	return false
+end
+local function flushSettings()
+	if settingsVersion <= sentSettingsVersion then
+		return
+	end
+	sentSettingsVersion = settingsVersion
+	remote:Dispatch({
+		action = "Settings",
+		speed = state.speed,
+		locked = state.locked,
+		paused = state.paused,
+		settingsRevision = settingsVersion,
+	})
+end
+local function play(id)
+	if state.loading then
+		notify("Una carga en curso. Espera o pulsa detener.", true)
+		return
+	end
+	flushSettings()
+	request("Play", id)
+end
+local function paintControls()
+	speedValue.Text = string.format("%.2f×", state.speed)
+	local ratio = (state.speed - Config.MinSpeed) / (Config.MaxSpeed - Config.MinSpeed)
+	fill.Size = UDim2.fromScale(ratio, 1)
+	knob.Position = UDim2.fromScale(ratio, 0.5)
+	lockTitle.Text = state.locked and "● Mantener: sí" or "○ Mantener: no"
+	pauseTitle.Text = state.paused and "▶ Reanudar pose" or "Ⅱ Pausar pose"
+	lockButton.BackgroundColor3 = state.locked and C.purple or C.elevated
+	pauseButton.BackgroundColor3 = state.paused and C.purple or C.elevated
+	miniPause.Text = state.paused and "▶" or "Ⅱ"
+	activeName.Text = state.active and state.active.Name or "Elige tu próximo emote"
+	activeImage.Image = state.active and thumbnail(state.active.Id) or ""
+	miniName.Text = state.active and state.active.Name or "Elige un emote"
+	activeState.Text = state.loading and "Cargando…"
+		or (
+			state.active and (state.paused and "POSE PAUSADA" or "REPRODUCIENDO")
+			or "UGC + clásicos de Roblox"
+		)
+	activeState.TextColor3 = state.active and C.green or C.muted
+end
+local function scheduleSettings()
+	settingsVersion = settingsVersion + 1
+	local version = settingsVersion
+	paintControls()
+	-- Debounce real: una solicitud por gesto/ráfaga; no por cada píxel del slider.
+	task.delay(0.15, function()
+		if destroyed or version ~= settingsVersion then
+			return
+		end
+		flushSettings()
+	end)
+end
+local function setSpeed(value)
+	state.speed = math.clamp(
+		math.floor(value / Config.SpeedStep + 0.5) * Config.SpeedStep,
+		Config.MinSpeed,
+		Config.MaxSpeed
+	)
+	scheduleSettings()
+end
+
+local function renderCards()
+	for _, card in ipairs(cards) do
+		card:Destroy()
+	end
+	cards = {}
+	local source = selectedTab == "Equipados" and state.equipped or items
+	local count = 0
+	for _, item in ipairs(source) do
+		local matches = selectedTab ~= "Roblox" and selectedTab ~= "UGC"
+			or (selectedTab == "Roblox" and item.IsRoblox)
+			or (selectedTab == "UGC" and not item.IsRoblox)
+		if matches then
+			count = count + 1
+			local card = make("Frame", {
+				Name = "Emote_" .. tostring(item.Id),
+				BackgroundColor3 = C.surface,
+				BorderSizePixel = 0,
+				LayoutOrder = count,
+				ClipsDescendants = true,
+			}, grid)
+			rounded(card)
+			stroke(card, state.active and state.active.Id == item.Id and C.accent or C.stroke)
+			table.insert(cards, card)
+			local image = make("ImageButton", {
+				Size = UDim2.new(1, -12, 0, 94),
+				Position = UDim2.fromOffset(6, 6),
+				BackgroundColor3 = C.elevated,
+				BorderSizePixel = 0,
+				Image = thumbnail(item.Id),
+				ScaleType = Enum.ScaleType.Fit,
+				AutoButtonColor = true,
+			}, card)
+			rounded(image, 8)
+			text(
+				image,
+				"▶",
+				18,
+				C.text,
+				{ Position = UDim2.new(1, -24, 1, -26), Size = UDim2.fromOffset(24, 24) }
+			)
+			text(
+				card,
+				item.Name,
+				12,
+				C.text,
+				{ Position = UDim2.fromOffset(10, 104), Size = UDim2.new(1, -20, 0, 20) }
+			)
+			text(card, item.IsRoblox and "ROBLOX · OFICIAL" or "UGC · " .. item.Creator, 9, C.accent, {
+				Position = UDim2.fromOffset(10, 126),
+				Size = UDim2.new(1, -20, 0, 14),
+			})
+			local equip = button(card, isEquipped(item.Id) and "✓ Quitar" or "+ Equipar", {
+				Position = UDim2.fromOffset(6, 144),
+				Size = UDim2.new(1, -12, 0, 44),
+				TextSize = 12,
+				BackgroundColor3 = isEquipped(item.Id) and C.purple or C.elevated,
+			})
+			-- Estas conexiones pertenecen a las tarjetas; Destroy las desconecta.
+			image.Activated:Connect(function()
+				play(item.Id)
+			end)
+			equip.Activated:Connect(function()
+				request("Equip", item.Id)
+			end)
+		end
+	end
+	empty.Visible = count == 0
+	emptyText.Text = selectedTab == "Equipados" and "Toca + Equipar para guardar hasta 8 accesos rápidos."
+		or "No hay resultados en estas páginas. Busca o carga más."
+	grid.Visible = count > 0
+	grid.Size = UDim2.new(1, 0, 0, math.ceil(count / 2) * 202 - (count > 0 and 10 or 0))
+	for name, tab in pairs(tabs) do
+		tween(tab, { BackgroundColor3 = name == selectedTab and C.purple or C.surface })
+	end
+	moreSection.Visible = selectedTab ~= "Equipados"
+end
+
+local function renderSlots()
+	local ids = {}
+	for _, item in ipairs(state.equipped) do
+		table.insert(ids, tostring(item.Id))
+	end
+	local signature = table.concat(ids, ",")
+	if signature == slotsSignature then
+		return
+	end
+	slotsSignature = signature
+	for _, child in ipairs(quickScroll:GetChildren()) do
+		if child:IsA("GuiObject") then
+			child:Destroy()
+		end
+	end
+	quickTitle.Text = "ACCESO RÁPIDO · " .. tostring(#state.equipped) .. "/8"
+	for i = 1, Config.MaxEquipped do
+		local item = state.equipped[i]
+		local slot = button(quickScroll, item and "" or tostring(i), {
+			Size = UDim2.fromOffset(50, 50),
+			LayoutOrder = i,
+			TextColor3 = C.muted,
+			BackgroundColor3 = item and C.elevated or C.surface,
+		})
+		if item then
+			make(
+				"ImageLabel",
+				{ Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = thumbnail(item.Id) },
+				slot
+			)
+		end
+		slot.Activated:Connect(function()
+			if item then
+				play(item.Id)
+			else
+				notify("Toca + Equipar en una tarjeta para ocupar este espacio.")
+			end
+		end)
+	end
+end
+
+local function normalize(result)
+	local id = tonumber(result.Id)
+	if not Validation.assetId(id) then
+		return nil
+	end
+	return {
+		Id = id,
+		Name = tostring(result.Name or "Emote"),
+		Creator = tostring(result.CreatorName or "Creador"),
+		IsRoblox = Validation.isRoblox(result.CreatorTargetId or result.CreatorId, result.CreatorType),
+	}
+end
+local function searchCatalog(nextPage)
+	if searching or os.clock() - lastSearch < 1 then
+		return
+	end
+	local query = searchBox.Text:sub(1, 100):match("^%s*(.-)%s*$")
+	local directId = Validation.parseId(query)
+	if directId and not nextPage then
+		play(directId)
+		return
+	end
+	if nextPage and catalogPages and catalogPages.IsFinished then
+		notify("Llegaste al final de los resultados.")
+		return
+	end
+	lastSearch = os.clock()
+	searching = true
+	searchRevision = searchRevision + 1
+	local revision = searchRevision
+	local oldPages = catalogPages
+	more.Text = "Cargando…"
+	notify("Consultando el catálogo de Roblox…")
+	task.delay(15, function()
+		if not destroyed and searching and revision == searchRevision then
+			searchRevision = searchRevision + 1
+			searching = false
+			catalogPages = nil -- Una paginación tardía ya no se reutiliza.
+			more.Text = "Reintentar búsqueda"
+			notify("El catálogo tarda en responder. Vuelve a intentarlo.", true)
+		end
+	end)
+	task.spawn(function()
+		local ok, pages = pcall(function()
+			if nextPage and oldPages then
+				oldPages:AdvanceToNextPageAsync()
+				return oldPages
+			end
+			local params = CatalogSearchParams.new()
+			params.AssetTypes = { Enum.AvatarAssetType.EmoteAnimation }
+			params.SearchKeyword = query
+			params.IncludeOffSale = true
+			params.Limit = 30
+			return AvatarEditorService:SearchCatalogAsync(params)
+		end)
+		if destroyed or revision ~= searchRevision then
+			return
+		end
+		searching = false
+		if not ok then
+			if not nextPage then
+				catalogPages = nil
+			end
+			more.Text = "Reintentar búsqueda"
+			notify("Catálogo no disponible. Puedes usar los destacados o introducir un ID.", true)
+			return
+		end
+		catalogPages = pages
+		if not nextPage or not oldPages then
+			items = {}
+		end
+		local seen = {}
+		for _, item in ipairs(items) do
+			seen[item.Id] = true
+		end
+		for _, result in ipairs(pages:GetCurrentPage()) do
+			local item = normalize(result)
+			if item and not seen[item.Id] then
+				table.insert(items, item)
+				seen[item.Id] = true
+			end
+		end
+		-- Evita miles de instancias en teléfonos. Una búsqueda nueva reinicia el límite.
+		local capped = #items >= 120
+		more.Text = capped and "Límite de 120 · afina la búsqueda"
+			or (pages.IsFinished and "Fin de resultados · volver a buscar" or "Cargar más emotes ↓")
+		if capped then
+			catalogPages = nil
+		end
+		if selectedTab == "Equipados" then
+			selectedTab = "Todos"
+		end
+		renderCards()
+		notify(tostring(#items) .. " emotes cargados · toca una imagen para reproducir")
+	end)
+end
+
+local function clampPosition(object, x, y)
+	local size = safe.AbsoluteSize
+	object.Position = UDim2.fromOffset(
+		math.clamp(x, 8, math.max(8, size.X - object.AbsoluteSize.X - 8)),
+		math.clamp(y, 8, math.max(8, size.Y - object.AbsoluteSize.Y - 8))
+	)
+end
+local positioned = false
+local function resize()
+	local size = safe.AbsoluteSize
+	if size.X < 1 or size.Y < 1 then
+		return
+	end
+	panel.Size = UDim2.fromOffset(math.min(440, size.X - 16), math.min(740, size.Y - 16))
+	mini.Size = UDim2.fromOffset(math.min(286, size.X - 16), 64)
+	if not positioned then
+		clampPosition(panel, size.X - panel.AbsoluteSize.X - 16, (size.Y - panel.AbsoluteSize.Y) / 2)
+		clampPosition(mini, size.X - mini.AbsoluteSize.X - 16, 18)
+		positioned = true
+	else
+		clampPosition(panel, panel.Position.X.Offset, panel.Position.Y.Offset)
+		clampPosition(mini, mini.Position.X.Offset, mini.Position.Y.Offset)
+	end
+end
+-- Un solo gesto activo: arrastrar la ventana no secuestra el joystick ni otros dedos.
+local drag = nil
+local function draggable(handle, target)
+	connect(handle.InputBegan, function(input)
+		if
+			input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch
+		then
+			drag = { input = input, origin = input.Position, position = target.Position, target = target }
+		end
+	end)
+end
+local function sliderAt(x)
+	local ratio = math.clamp((x - rail.AbsolutePosition.X) / math.max(1, rail.AbsoluteSize.X), 0, 1)
+	setSpeed(Config.MinSpeed + ratio * (Config.MaxSpeed - Config.MinSpeed))
+end
+connect(slider.InputBegan, function(input)
+	if
+		input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch
+	then
+		sliderInput = input
+		body.ScrollingEnabled = false
+		sliderAt(input.Position.X)
+	end
+end)
+connect(UserInputService.InputChanged, function(input)
+	if
+		sliderInput
+		and (
+			input == sliderInput
+			or (
+				sliderInput.UserInputType == Enum.UserInputType.MouseButton1
+				and input.UserInputType == Enum.UserInputType.MouseMovement
+			)
+		)
+	then
+		sliderAt(input.Position.X)
+	end
+	if
+		drag
+		and (
+			input == drag.input
+			or (
+				drag.input.UserInputType == Enum.UserInputType.MouseButton1
+				and input.UserInputType == Enum.UserInputType.MouseMovement
+			)
+		)
+	then
+		local delta = input.Position - drag.origin
+		clampPosition(drag.target, drag.position.X.Offset + delta.X, drag.position.Y.Offset + delta.Y)
+	end
+end)
+connect(UserInputService.InputEnded, function(input)
+	if input == sliderInput then
+		sliderInput = nil
+		body.ScrollingEnabled = true
+	end
+	if drag and input == drag.input then
+		drag = nil
+	end
+end)
+draggable(header, panel)
+draggable(mini, mini)
+connect(safe:GetPropertyChangedSignal("AbsoluteSize"), resize)
+
+local function showPanel()
+	closed = false
+	panel.Visible, mini.Visible, launcher.Visible = true, false, false
+	resize()
+end
+connect(minimize.Activated, function()
+	panel.Visible, mini.Visible, launcher.Visible = false, true, false
+	notify("Minimizado. Tu emote continúa.")
+end)
+connect(close.Activated, function()
+	closed = true
+	request("Stop")
+	panel.Visible, mini.Visible, launcher.Visible = false, false, true
+end)
+connect(miniOpen.Activated, showPanel)
+connect(launcher.Activated, showPanel)
+connect(stopButton.Activated, function()
+	request("Stop")
+end)
+connect(miniStop.Activated, function()
+	request("Stop")
+end)
+connect(minus.Activated, function()
+	setSpeed(state.speed - Config.SpeedStep)
+end)
+connect(plus.Activated, function()
+	setSpeed(state.speed + Config.SpeedStep)
+end)
+connect(lockButton.Activated, function()
+	state.locked = not state.locked
+	scheduleSettings()
+end)
+local function togglePause()
+	state.paused = not state.paused
+	scheduleSettings()
+end
+connect(pauseButton.Activated, togglePause)
+connect(miniPause.Activated, togglePause)
+connect(searchButton.Activated, function()
+	searchCatalog(false)
+end)
+connect(searchBox.FocusLost, function(enterPressed)
+	if enterPressed then
+		searchCatalog(false)
+	end
+end)
+connect(more.Activated, function()
+	searchCatalog(catalogPages ~= nil and not catalogPages.IsFinished)
+end)
+for name, tab in pairs(tabs) do
+	connect(tab.Activated, function()
+		selectedTab = name
+		renderCards()
+	end)
+end
+connect(remote.Changed, function(snapshot)
+	if destroyed then
+		return
+	end
+	local previousActive = state.active and state.active.Id
+	local previousSlots = slotsSignature
+	state.active, state.equipped, state.loading = snapshot.active, snapshot.equipped, snapshot.loading
+	-- No hacer saltar el slider a un valor antiguo mientras el usuario lo arrastra.
+	if not sliderInput and snapshot.settingsRevision >= settingsVersion then
+		state.speed, state.locked, state.paused = snapshot.speed, snapshot.locked, snapshot.paused
+		settingsVersion = snapshot.settingsRevision
+		sentSettingsVersion = math.max(sentSettingsVersion, settingsVersion)
+	end
+	if snapshot.active then
+		local found = false
+		for _, item in ipairs(items) do
+			if item.Id == snapshot.active.Id then
+				found = true
+				break
+			end
+		end
+		if not found then
+			table.insert(items, 1, snapshot.active)
+			if #items > 120 then
+				table.remove(items)
+			end
+		end
+	end
+	paintControls()
+	renderSlots()
+	if previousActive ~= (state.active and state.active.Id) or previousSlots ~= slotsSignature then
+		renderCards()
+	end
+	if snapshot.message then
+		notify(snapshot.message, snapshot.isError)
+	end
+end)
+connect(UserInputService.InputBegan, function(input, processed)
+	if not processed and not UserInputService:GetFocusedTextBox() and input.KeyCode == Enum.KeyCode.M then
+		if panel.Visible then
+			panel.Visible, mini.Visible = false, true
+		else
+			showPanel()
+		end
+	end
+end)
+connect(player.CharacterAdded, function()
+	state.active = nil
+	paintControls()
+	if not closed then
+		notify("Nuevo personaje · tus accesos rápidos se mantienen.")
+	end
+	request("Sync")
+end)
+connect(gui.Destroying, function()
+	remote:Destroy()
+	destroyed = true
+	searchRevision = searchRevision + 1
+	request("Stop")
+	for _, connection in ipairs(connections) do
+		connection:Disconnect()
+	end
+end)
+
+slotsSignature = "initial"
+renderSlots()
+renderCards()
+paintControls()
+task.defer(resize)
+request("Sync")
+
+task.defer(function()
+	if not destroyed then
+		searchCatalog(false)
+	end
+end)

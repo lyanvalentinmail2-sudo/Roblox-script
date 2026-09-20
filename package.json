@@ -4,10 +4,10 @@
   "private": true,
   "description": "Herramientas de desarrollo; Roblox no necesita Node ni estas dependencias.",
   "scripts": {
-    "test": "node tools/test.mjs && python3 tools/package.py --check",
+    "test": "node tools/test.mjs && python3 tools/package.py --check && python3 tools/standalone.py --check",
     "format": "stylua src tests",
     "format:check": "stylua --check src tests",
-    "package": "python3 tools/package.py"
+    "package": "python3 tools/package.py && python3 tools/standalone.py"
   },
   "devDependencies": {
     "@johnnymorganz/stylua-bin": "2.5.2",
