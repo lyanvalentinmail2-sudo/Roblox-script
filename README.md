@@ -4,11 +4,24 @@ Un solo archivo Lua: **`EmoteGlass.lua`**. GUI con efecto vidrio (blur + translu
 compacta y pensada para usar con el pulgar en el teléfono.
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/TU-USUARIO/Roblox-script/main/EmoteGlass.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/lyanvalentinmail2-sudo/Roblox-script/arena/01a0bfd6-roblox-script/EmoteGlass.lua"))()
 ```
 
-> Cambia `TU-USUARIO` por tu usuario de GitHub (o pega el archivo directamente en Delta:
-> **Ejecutor → Pegar código → Ejecutar**).
+### Cómo ejecutarlo en Delta (Android)
+
+1. Abre **Roblox** y **entra a cualquier juego** (`game:HttpGet` necesita estar dentro de un
+   juego; desde el menú de Roblox no funciona).
+2. Abre **Delta** y dale a **Attach / Inyectar** (el icono de Roblox). Espera a que diga conectado.
+3. En Delta: pestaña **Console/Ejecutor** → **Paste** (pegar) → pega el `loadstring` de arriba →
+   **Execute / Ejecutar**.
+4. Aparece la ventana de vidrio. Si la pierdes de vista, busca la **bola flotante "E"**
+   y tócala.
+
+**Sin internet / sin URL:** copia el contenido de `EmoteGlass.lua`, pégalo en el editor de
+Delta, guárdalo como script y ejecútalo. Hace exactamente lo mismo.
+
+> El archivo vive en la rama `arena/01a0bfd6-roblox-script`. Si lo mueves a `main`,
+> la URL pasa a ser `.../Roblox-script/main/EmoteGlass.lua`.
 
 ---
 
