@@ -1,6 +1,6 @@
-# FE Emotes
+# FE Emotes · NOIR
 
-**Tu avatar. Tu ritmo.** Un sistema de emotes para tu propia experiencia de Roblox, con interfaz oscura, acentos violeta y controles pensados para teléfono.
+**Tu avatar. Tu ritmo.** Un sistema de emotes para tu propia experiencia de Roblox, con interfaz negra, detalles en blanco y grafito, biblioteca personal y controles pensados para teléfono.
 
 ## Elige la versión
 
@@ -16,13 +16,15 @@
 ## Funciones
 
 - **Catálogo real**: búsqueda por nombre, ID o enlace de catálogo; miniaturas y paginación.
-- **UGC + no UGC**: filtros Todos, UGC, Roblox y Equipados. UGC identifica creadores distintos del usuario oficial Roblox; los filtros se aplican a las páginas cargadas.
+- **UGC + no UGC**: filtros Todos, UGC y Roblox dentro de Catálogo; Equipados tiene su propia pestaña. UGC identifica creadores distintos del usuario oficial Roblox; los filtros se aplican a las páginas cargadas.
+- **Zona Favoritos independiente**: marca ☆ en cualquier tarjeta y encuentra tus emotes en la pestaña Favoritos. Hasta 120, búsqueda local y conservación durante la sesión, incluso al volver a ejecutar el archivo. No consume los ocho espacios equipados.
+- **Animaciones TweenService**: entrada/salida del panel, selector de pestañas, tarjetas, botones, controles desplegables y slider; sin animaciones infinitas en segundo plano.
 - **8 accesos rápidos**: equipar, reproducir y quitar emotes sin escribir comandos.
 - **Velocidad de 0,25× a 3×**: deslizador táctil y botones de ajuste de 0,25×.
 - **Mantener al moverte**: caminar o saltar no cancela el emote cuando está activado.
 - **Pausar pose**: congela el fotograma con velocidad cero. Es independiente de “Mantener”; activa ambos para moverte con la pose congelada.
-- **Minimizar**: el emote sigue funcionando en un minirreproductor con pausa y detener.
-- **Cerrar**: detiene el emote, cancela su carga pendiente y oculta el panel. El botón pequeño **FE** permite volver a abrirlo.
+- **Minimizar**: el emote sigue funcionando y aparece un **icono circular FE**. Arrástralo para colocarlo donde quieras; tócalo para abrir el panel.
+- **Cerrar**: detiene el emote, cancela su carga pendiente y oculta el panel. El icono **FE** permite volver a abrirlo.
 - Ventana arrastrable, zonas seguras de pantalla, ajuste al girar el teléfono y botones principales de al menos 44 px. Atajo **M** en PC.
 - Validación de IDs, tipo de asset, velocidad, personaje R15 y frecuencia de solicitudes en el servidor; limpieza al morir o salir.
 
@@ -34,7 +36,7 @@
 
    | Dentro del paquete | Destino real |
    | --- | --- |
-   | `ReplicatedStorage/FEEmotes` (Folder con dos módulos) | `game.ReplicatedStorage` |
+   | `ReplicatedStorage/FEEmotes` (Folder con cuatro módulos) | `game.ReplicatedStorage` |
    | `ServerScriptService/FEEmotes` (Script) | `game.ServerScriptService` |
    | `StarterPlayer/StarterPlayerScripts/FEEmotes` (LocalScript) | `game.StarterPlayer.StarterPlayerScripts` |
 
@@ -53,7 +55,9 @@ Crea esta estructura en Explorer y pega el contenido del archivo correspondiente
 ReplicatedStorage
 └── FEEmotes                         Folder
     ├── Config                       ModuleScript ← src/ReplicatedStorage/FEEmotes/Config.lua
-    └── Validation                   ModuleScript ← src/ReplicatedStorage/FEEmotes/Validation.lua
+    ├── Validation                   ModuleScript ← src/ReplicatedStorage/FEEmotes/Validation.lua
+    ├── Favorites                    ModuleScript ← src/ReplicatedStorage/FEEmotes/Favorites.lua
+    └── HubState                     ModuleScript ← src/ReplicatedStorage/FEEmotes/HubState.lua
 ServerScriptService
 └── FEEmotes                         Script ← src/ServerScriptService/FEEmotes.server.lua
 StarterPlayer
@@ -77,12 +81,13 @@ Conecta el plugin al proyecto. La configuración sincroniza únicamente los comp
 
 1. Toca una **imagen** del catálogo para reproducir el emote en bucle.
 2. Toca **+ Equipar** para añadirlo a la fila de accesos rápidos. En **Equipados**, usa **✓ Quitar** para liberar un espacio.
-3. Para un ID concreto, introduce el ID **del emote del catálogo**, o `https://www.roblox.com/catalog/ID/Nombre`, y pulsa **Ir →**. El servidor lo comprueba y, si se puede reproducir, aparecerá en la lista para equiparlo.
-4. Ajusta la velocidad. Activa **Mantener** si quieres seguir moviéndote sin que se cancele.
-5. Usa **Pausar pose** para parar la animación en el fotograma actual; **Reanudar pose** recupera la velocidad elegida.
-6. Usa **−** en la cabecera para minimizar, **■** para detener o **×** para cerrar. Arrastra la cabecera para mover el panel. En el minirreproductor, toca el nombre para volver al panel y arrastra el borde libre para moverlo.
+3. Marca **☆** para guardar un favorito. La pestaña **Favoritos** muestra tu colección aunque cambies de búsqueda o de página del catálogo. Usa **★** para quitarlo. El buscador de Favoritos filtra por nombre, creador o ID, sin llamar al catálogo.
+4. Para un ID concreto, introduce el ID **del emote del catálogo**, o `https://www.roblox.com/catalog/ID/Nombre`, y pulsa **Ir →**. El servidor lo comprueba y, si se puede reproducir, aparecerá en la lista para equiparlo.
+5. Abre **≡** en la tarjeta del reproductor para desplegar velocidad y opciones. Ajusta la velocidad. Activa **Mantener** si quieres seguir moviéndote sin que se cancele.
+6. Usa **Pausar pose** para parar la animación en el fotograma actual; **Reanudar pose** recupera la velocidad elegida.
+7. Usa **−** en la cabecera para minimizar, **■** para detener o **×** para cerrar. Arrastra la cabecera para mover el panel. Al minimizar aparece el **icono circular FE**: tocarlo abre el hub; arrastrarlo no lo abre por accidente.
 
-**Equipar es un acceso rápido dentro de esta experiencia.** No compra el emote, no lo añade al inventario global ni modifica permanentemente la rueda de emotes de tu cuenta. Los accesos y ajustes sobreviven a la reaparición del personaje, pero se reinician al salir del servidor; no hay persistencia entre sesiones.
+**Equipar es un acceso rápido dentro de esta experiencia.** No compra el emote, no lo añade al inventario global ni modifica permanentemente la rueda de emotes de tu cuenta. Los accesos y ajustes sobreviven a la reaparición del personaje, pero se reinician al salir del servidor; no hay persistencia entre sesiones. Los **favoritos**, a diferencia de los equipados, también se conservan al recrear la GUI o volver a ejecutar el archivo, mediante un atributo local en PlayerGui. No se escriben archivos en el teléfono ni se usa DataStore: al abandonar la sesión se pierden.
 
 ## Disponibilidad y permisos: importante
 
@@ -125,9 +130,13 @@ npm test
 - Compilación de sintaxis de las fuentes y del archivo único para ejecutores con Luau (WASM).
 - Pruebas de validación, límites y clasificación de creadores.
 - Pruebas del servidor con dobles de servicios: reproducción, velocidad, congelación, movimiento, cancelación, timeout, equipados, permisos, R6, muerte y desconexión.
+- Pruebas de favoritos: añadir/quitar, límite, búsquedas, copia defensiva, restauración y datos inválidos; tickets de transición contra callbacks antiguos.
+- Pruebas estructurales de la GUI con dobles: favoritos, filtros, controles, minimizar/restaurar, arrastrar el icono, recrear la interfaz y liberar tweens. No son pruebas visuales ni de un dispositivo real.
 - 30 comprobaciones adicionales del controlador local: carga de catálogo, movimiento, ajustes, permisos, timeout, limpieza y reinyección.
 - Verificación de que el modelo importable y el archivo único coinciden exactamente con las fuentes.
 - GitHub Actions ejecuta estas comprobaciones en cada push y pull request.
+
+**Actualizar desde una versión anterior:** vuelve a descargar el archivo único; el cargador fijado a un commit antiguo no se actualiza solo. En Studio reemplaza el paquete e incluye los nuevos módulos `Favorites` y `HubState`, sin duplicar los scripts.
 
 Después de editar fuentes:
 

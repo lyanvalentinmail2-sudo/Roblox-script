@@ -25,6 +25,24 @@ try {
     + '\nlocal createController = (function()\n' + await read('src/Standalone/Controller.lua') + '\nend)()\n'
     + await read('tests/standalone.fixture.luau') + '\n' + await read('tests/standalone.spec.luau');
   await state.loadstring(standaloneTest, 'Standalone tests', true)();
+  const hubModules = modules
+    + `local Favorites = (function()\n${await read('src/ReplicatedStorage/FEEmotes/Favorites.lua')}\nend)()\n`
+    + `local HubState = (function()\n${await read('src/ReplicatedStorage/FEEmotes/HubState.lua')}\nend)()\n`;
+  await state.loadstring(hubModules + await read('tests/hub.spec.luau'), 'Hub modules', true)();
+  const uiTest = hubModules + await read('tests/server.fixture.luau')
+    + '\n' + await read('tests/ui.fixture.luau')
+    + '\ndo\n' + await read('src/StarterPlayer/StarterPlayerScripts/FEEmotes.client.lua') + '\nend\n'
+    + await read('tests/ui.spec.luau')
+    + '\ndo\n' + await read('src/StarterPlayer/StarterPlayerScripts/FEEmotes.client.lua') + '\nend\n'
+    + `advance(1)
+local restoredGui = assert(playerGui:FindFirstChild("FEEmotesGui"))
+check(find(find(restoredGui, "Emote_123"), "Favorite").Text == "★", "UI: favoritos sobreviven al recrear la GUI")
+restoredGui:Destroy()
+advance(1)
+check(liveTweens == 0, "UI: segunda destrucción limpia todos los tweens")
+print("Restauración GUI: 2 comprobaciones adicionales correctas")
+`;
+  await state.loadstring(uiTest, 'UI structure tests', true)();
 } finally {
   state.destroy();
 }

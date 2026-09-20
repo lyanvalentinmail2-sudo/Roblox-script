@@ -87,13 +87,137 @@ return Validation
 </ProtectedString>
           </Properties>
         </Item>
+        <Item class="ModuleScript" referent="RBX6">
+          <Properties>
+            <string name="Name">Favorites</string>
+            <ProtectedString name="Source">-- Biblioteca local, independiente del catálogo paginado y de los ocho equipados.
+local Favorites = {}
+
+function Favorites.new(validation, limit)
+	local entries = {}
+	local maximum = limit or 120
+	local library = {}
+	local function sanitize(item)
+		if
+			type(item) ~= "table"
+			or not validation.assetId(item.Id)
+			or type(item.Name) ~= "string"
+			or #item.Name == 0
+			or #item.Name &gt; 200
+		then
+			return nil
+		end
+		return {
+			Id = item.Id,
+			Name = item.Name,
+			Creator = type(item.Creator) == "string" and #item.Creator &lt;= 200 and item.Creator or "Creador",
+			IsRoblox = item.IsRoblox == true,
+		}
+	end
+	function library:contains(id)
+		for _, entry in ipairs(entries) do
+			if entry.Id == id then
+				return true
+			end
+		end
+		return false
+	end
+	function library:count()
+		return #entries
+	end
+	function library:toggle(item)
+		local safe = sanitize(item)
+		if not safe then
+			return false, "invalid"
+		end
+		for i, entry in ipairs(entries) do
+			if entry.Id == safe.Id then
+				table.remove(entries, i)
+				return true, "removed"
+			end
+		end
+		if #entries &gt;= maximum then
+			return false, "full"
+		end
+		table.insert(entries, 1, safe)
+		return true, "added"
+	end
+	function library:list(query)
+		local result = {}
+		local needle = type(query) == "string" and query:lower():match("^%s*(.-)%s*$") or ""
+		for _, entry in ipairs(entries) do
+			if
+				needle == ""
+				or entry.Name:lower():find(needle, 1, true)
+				or entry.Creator:lower():find(needle, 1, true)
+				or tostring(entry.Id) == needle
+			then
+				table.insert(result, table.clone(entry))
+			end
+		end
+		return result
+	end
+	function library:export()
+		return { Version = 1, Items = self:list() }
+	end
+	function library:restore(payload)
+		if type(payload) ~= "table" or payload.Version ~= 1 or type(payload.Items) ~= "table" then
+			return false
+		end
+		local imported, seen = {}, {}
+		-- Solo se examinan 120 elementos; payloads enormes no bloquean la interfaz.
+		for i = 1, math.min(#payload.Items, maximum) do
+			local safe = sanitize(payload.Items[i])
+			if safe and not seen[safe.Id] then
+				table.insert(imported, safe)
+				seen[safe.Id] = true
+			end
+		end
+		entries = imported
+		return true
+	end
+	return library
+end
+
+return Favorites
+</ProtectedString>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="RBX7">
+          <Properties>
+            <string name="Name">HubState</string>
+            <ProtectedString name="Source">-- Tickets de transición: un tween antiguo nunca debe ocultar una ventana reabierta.
+local HubState = {}
+function HubState.new()
+	local state = { mode = "open", revision = 0 }
+	function state:set(mode)
+		if self.mode == "destroyed" or (mode ~= "open" and mode ~= "minimized" and mode ~= "closed") then
+			return nil
+		end
+		self.mode = mode
+		self.revision = self.revision + 1
+		return self.revision
+	end
+	function state:current(ticket)
+		return self.mode ~= "destroyed" and self.revision == ticket
+	end
+	function state:destroy()
+		self.mode = "destroyed"
+		self.revision = self.revision + 1
+	end
+	return state
+end
+return HubState
+</ProtectedString>
+          </Properties>
+        </Item>
       </Item>
     </Item>
-    <Item class="Folder" referent="RBX6">
+    <Item class="Folder" referent="RBX8">
       <Properties>
         <string name="Name">ServerScriptService</string>
       </Properties>
-      <Item class="Script" referent="RBX7">
+      <Item class="Script" referent="RBX9">
         <Properties>
           <string name="Name">FEEmotes</string>
           <ProtectedString name="Source">-- FE Emotes • servidor autoritativo. No requiere HTTP, loadstring ni ejecutores.
@@ -486,23 +610,24 @@ end
         </Properties>
       </Item>
     </Item>
-    <Item class="Folder" referent="RBX8">
+    <Item class="Folder" referent="RBX10">
       <Properties>
         <string name="Name">StarterPlayer</string>
       </Properties>
-      <Item class="Folder" referent="RBX9">
+      <Item class="Folder" referent="RBX11">
         <Properties>
           <string name="Name">StarterPlayerScripts</string>
         </Properties>
-        <Item class="LocalScript" referent="RBX10">
+        <Item class="LocalScript" referent="RBX12">
           <Properties>
             <string name="Name">FEEmotes</string>
-            <ProtectedString name="Source">-- FE Emotes • interfaz táctil, sin dependencias externas.
+            <ProtectedString name="Source">-- FE Emotes / NOIR • hub negro, biblioteca personal y transiciones táctiles.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local AvatarEditorService = game:GetService("AvatarEditorService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -516,6 +641,8 @@ if not shared then
 end
 local Config = require(shared:WaitForChild("Config"))
 local Validation = require(shared:WaitForChild("Validation"))
+local Favorites = require(shared:WaitForChild("Favorites"))
+local HubState = require(shared:WaitForChild("HubState"))
 local remote = shared:WaitForChild("Request", 15)
 if not remote then
 	warn("[FE Emotes] Falta el Script del servidor. Consulta README.md.")
@@ -523,17 +650,37 @@ if not remote then
 end
 
 local C = {
-	background = Color3.fromRGB(17, 18, 27),
-	surface = Color3.fromRGB(27, 28, 41),
-	elevated = Color3.fromRGB(37, 38, 54),
-	stroke = Color3.fromRGB(58, 58, 79),
-	text = Color3.fromRGB(246, 244, 255),
-	muted = Color3.fromRGB(164, 165, 188),
-	accent = Color3.fromRGB(167, 139, 250),
-	purple = Color3.fromRGB(111, 77, 220),
-	green = Color3.fromRGB(116, 231, 188),
-	error = Color3.fromRGB(255, 157, 174),
+	background = Color3.fromRGB(5, 5, 6),
+	surface = Color3.fromRGB(15, 15, 17),
+	elevated = Color3.fromRGB(26, 26, 29),
+	stroke = Color3.fromRGB(60, 60, 65),
+	text = Color3.fromRGB(245, 245, 247),
+	muted = Color3.fromRGB(158, 158, 167),
+	accent = Color3.fromRGB(237, 237, 241),
+	selected = Color3.fromRGB(226, 226, 231),
+	error = Color3.fromRGB(255, 164, 174),
 }
+-- Solo tweens activos; se cancelan al reemplazarlos y al destruir la GUI.
+local activeTweens = {}
+local function tween(object, props, duration, style)
+	local previous = activeTweens[object]
+	if previous then
+		previous:Cancel()
+	end
+	local animation = TweenService:Create(
+		object,
+		TweenInfo.new(duration or 0.18, style or Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+		props
+	)
+	activeTweens[object] = animation
+	animation.Completed:Once(function()
+		if activeTweens[object] == animation then
+			activeTweens[object] = nil
+		end
+	end)
+	animation:Play()
+	return animation
+end
 local connections = {}
 local function connect(signal, callback)
 	local connection = signal:Connect(callback)
@@ -579,18 +726,39 @@ local function button(parent, value, props)
 		TextColor3 = C.text,
 		TextSize = 14,
 		Font = Enum.Font.GothamMedium,
-		AutoButtonColor = true,
+		AutoButtonColor = false,
 		Size = UDim2.fromOffset(44, 44),
 	}
 	for key, override in pairs(props or {}) do
 		options[key] = override
 	end
 	local object = make("TextButton", options, parent)
-	rounded(object, 10)
+	rounded(object, 12)
+	if options.Name ~= "SpeedSlider" then
+		local scale = make("UIScale", { Scale = 1 }, object)
+		-- Conexiones propiedad del botón: Destroy las libera junto con la tarjeta.
+		object.MouseEnter:Connect(function()
+			tween(scale, { Scale = 1.025 }, 0.16)
+		end)
+		object.MouseLeave:Connect(function()
+			tween(scale, { Scale = 1 }, 0.16)
+		end)
+		object.Activated:Connect(function()
+			scale.Scale = 0.94
+			tween(scale, { Scale = 1 }, 0.28, Enum.EasingStyle.Back)
+		end)
+		object.Destroying:Connect(function()
+			if activeTweens[scale] then
+				activeTweens[scale]:Cancel()
+				activeTweens[scale] = nil
+			end
+			if activeTweens[object] then
+				activeTweens[object]:Cancel()
+				activeTweens[object] = nil
+			end
+		end)
+	end
 	return object
-end
-local function tween(object, props)
-	TweenService:Create(object, TweenInfo.new(0.18, Enum.EasingStyle.Quad), props):Play()
 end
 
 local gui = make("ScreenGui", {
@@ -605,21 +773,23 @@ local safe = make("Frame", {
 	BackgroundTransparency = 1,
 	Size = UDim2.fromScale(1, 1),
 }, gui)
-local panel = make("Frame", {
+local panel = make("CanvasGroup", {
 	Name = "Panel",
+	GroupTransparency = 1,
 	BackgroundColor3 = C.background,
 	BorderSizePixel = 0,
 	Size = UDim2.fromOffset(440, 740),
 	ClipsDescendants = true,
 }, safe)
-rounded(panel, 20)
+local panelScale = make("UIScale", { Scale = 1 }, panel)
+rounded(panel, 22)
 stroke(panel)
 local accent = make("Frame", {
 	BackgroundColor3 = C.accent,
 	BorderSizePixel = 0,
-	Size = UDim2.new(1, 0, 0, 3),
+	Size = UDim2.new(1, 0, 0, 1),
 }, panel)
-make("UIGradient", { Color = ColorSequence.new(C.purple, C.green) }, accent)
+make("UIGradient", { Color = ColorSequence.new(C.stroke, C.accent) }, accent)
 local header = make("Frame", {
 	Name = "DragHandle",
 	Active = true,
@@ -630,14 +800,14 @@ local header = make("Frame", {
 text(header, "FE", 23, C.accent, { Size = UDim2.fromOffset(36, 28), Font = Enum.Font.GothamBold })
 text(
 	header,
-	"Emotes",
-	23,
+	"EMOTES",
+	21,
 	C.text,
 	{ Position = UDim2.fromOffset(40, 0), Size = UDim2.new(1, -40, 0, 28), Font = Enum.Font.GothamBold }
 )
 text(
 	header,
-	"TU AVATAR. TU RITMO.",
+	"NOIR EDITION  /  TU RITMO",
 	10,
 	C.muted,
 	{ Position = UDim2.fromOffset(0, 31), Size = UDim2.new(1, 0, 0, 16) }
@@ -645,10 +815,43 @@ text(
 local minimize = button(panel, "−", { TextSize = 24, Position = UDim2.new(1, -104, 0, 11) })
 local close = button(panel, "×", { TextSize = 24, Position = UDim2.new(1, -54, 0, 11) })
 
+local navigation = make("Frame", {
+	Name = "LibraryNavigation",
+	Position = UDim2.fromOffset(14, 68),
+	Size = UDim2.new(1, -28, 0, 48),
+	BackgroundColor3 = C.surface,
+	BorderSizePixel = 0,
+}, panel)
+rounded(navigation, 14)
+local navIndicator = make("Frame", {
+	Position = UDim2.fromOffset(4, 4),
+	Size = UDim2.new(1 / 3, -8, 1, -8),
+	BackgroundColor3 = C.selected,
+	BorderSizePixel = 0,
+}, navigation)
+rounded(navIndicator, 10)
+local viewButtons = {}
+for i, name in ipairs({ "Catálogo", "Favoritos", "Equipados" }) do
+	viewButtons[name] = button(navigation, name, {
+		Name = name,
+		Position = UDim2.new((i - 1) / 3, 0, 0, 0),
+		Size = UDim2.new(1 / 3, 0, 1, 0),
+		BackgroundTransparency = 1,
+		TextSize = 12,
+		TextColor3 = i == 1 and C.background or C.muted,
+	})
+end
+local pageSurface = make("CanvasGroup", {
+	Name = "LibraryPage",
+	Position = UDim2.fromOffset(14, 128),
+	Size = UDim2.new(1, -28, 1, -172),
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+}, panel)
 local body = make("ScrollingFrame", {
 	Name = "Content",
-	Position = UDim2.fromOffset(14, 68),
-	Size = UDim2.new(1, -28, 1, -112),
+	Position = UDim2.fromOffset(0, 0),
+	Size = UDim2.fromScale(1, 1),
 	BackgroundTransparency = 1,
 	BorderSizePixel = 0,
 	ScrollBarThickness = 3,
@@ -657,7 +860,7 @@ local body = make("ScrollingFrame", {
 	CanvasSize = UDim2.new(),
 	AutomaticCanvasSize = Enum.AutomaticSize.Y,
 	ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
-}, panel)
+}, pageSurface)
 make("UIPadding", { PaddingRight = UDim.new(0, 5), PaddingBottom = UDim.new(0, 8) }, body)
 make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10) }, body)
 local order = 0
@@ -676,28 +879,38 @@ local function section(height, surface)
 	return frame
 end
 
-local now = section(64, true)
+local now = section(72, true)
+stroke(now)
 local activeImage = make("ImageLabel", {
 	BackgroundColor3 = C.elevated,
 	BorderSizePixel = 0,
 	Size = UDim2.fromOffset(48, 48),
-	Position = UDim2.fromOffset(8, 8),
+	Position = UDim2.fromOffset(10, 12),
 	Image = "",
 	ScaleType = Enum.ScaleType.Fit,
 }, now)
 rounded(activeImage, 10)
 local activeName = text(now, "Elige tu próximo emote", 14, C.text, {
-	Position = UDim2.fromOffset(66, 10),
-	Size = UDim2.new(1, -128, 0, 22),
+	Position = UDim2.fromOffset(68, 13),
+	Size = UDim2.new(1, -180, 0, 22),
 })
 local activeState = text(now, "UGC + clásicos de Roblox", 11, C.muted, {
-	Position = UDim2.fromOffset(66, 34),
-	Size = UDim2.new(1, -128, 0, 18),
+	Position = UDim2.fromOffset(68, 37),
+	Size = UDim2.new(1, -180, 0, 18),
 })
 local stopButton =
-	button(now, "■", { Position = UDim2.new(1, -54, 0, 10), TextColor3 = C.error, TextSize = 21 })
+	button(now, "■", { Position = UDim2.new(1, -54, 0, 14), TextColor3 = C.error, TextSize = 21 })
 
+local controlsToggle =
+	button(now, "≡", { Name = "PlayerControls", Position = UDim2.new(1, -104, 0, 14), TextSize = 24 })
+local controlsGroup = section(0, false)
+controlsGroup.Name = "ExpandedPlayer"
+controlsGroup.ClipsDescendants = true
+controlsGroup.Visible = false
+local controlsOpen = false
+local controlsRevision = 0
 local speedSection = section(66, false)
+speedSection.Parent = controlsGroup
 text(speedSection, "VELOCIDAD", 10, C.muted, { Size = UDim2.new(0.5, 0, 0, 18) })
 local speedValue = text(speedSection, "1.00×", 13, C.accent, {
 	Position = UDim2.new(0.5, 0, 0, 0),
@@ -731,6 +944,8 @@ local knob = make("Frame", {
 }, rail)
 rounded(knob, 10)
 local switches = section(52, false)
+switches.Parent = controlsGroup
+switches.Position = UDim2.fromOffset(0, 76)
 local lockButton = button(switches, "", { Size = UDim2.new(0.5, -4, 1, 0) })
 local pauseButton =
 	button(switches, "", { Position = UDim2.new(0.5, 4, 0, 0), Size = UDim2.new(0.5, -4, 1, 0) })
@@ -782,8 +997,22 @@ make("UIListLayout", {
 	SortOrder = Enum.SortOrder.LayoutOrder,
 }, quickScroll)
 
-local browseTitle = section(24, false)
-text(browseTitle, "Descubre tu estilo", 18, C.text, { Font = Enum.Font.GothamBold })
+local browseTitle = section(66, false)
+local collectionEyebrow = text(browseTitle, "LA BIBLIOTECA", 10, C.muted, { Size = UDim2.new(1, -54, 0, 16) })
+local collectionTitle = text(browseTitle, "Encuentra tu ritmo.", 19, C.text, {
+	Position = UDim2.fromOffset(0, 20),
+	Size = UDim2.new(1, -50, 0, 25),
+	Font = Enum.Font.GothamBold,
+})
+local collectionHint = text(browseTitle, "Toca ▶ para bailar o ☆ para guardar.", 11, C.muted, {
+	Position = UDim2.fromOffset(0, 48),
+	Size = UDim2.new(1, 0, 0, 16),
+})
+local collectionCount = text(browseTitle, "06", 22, C.accent, {
+	Position = UDim2.new(1, -48, 0, 18),
+	Size = UDim2.fromOffset(48, 28),
+	TextXAlignment = Enum.TextXAlignment.Right,
+})
 local searchSection = section(48, false)
 local searchBox = make("TextBox", {
 	Name = "Search",
@@ -802,11 +1031,12 @@ local searchBox = make("TextBox", {
 rounded(searchBox)
 stroke(searchBox)
 make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 10) }, searchBox)
-local searchButton = button(
-	searchSection,
-	"Ir →",
-	{ Position = UDim2.new(1, -50, 0, 0), Size = UDim2.fromOffset(50, 48), BackgroundColor3 = C.purple }
-)
+local searchButton = button(searchSection, "Ir →", {
+	Position = UDim2.new(1, -50, 0, 0),
+	Size = UDim2.fromOffset(50, 48),
+	BackgroundColor3 = C.selected,
+	TextColor3 = C.background,
+})
 local tabsSection = section(44, false)
 make("UIListLayout", {
 	FillDirection = Enum.FillDirection.Horizontal,
@@ -814,20 +1044,21 @@ make("UIListLayout", {
 	SortOrder = Enum.SortOrder.LayoutOrder,
 }, tabsSection)
 local tabs = {}
-for i, name in ipairs({ "Todos", "UGC", "Roblox", "Equipados" }) do
+for i, name in ipairs({ "Todos", "UGC", "Roblox" }) do
 	tabs[name] =
-		button(tabsSection, name, { Size = UDim2.new(0.25, -5, 1, 0), TextSize = 12, LayoutOrder = i })
+		button(tabsSection, name, { Size = UDim2.new(1 / 3, -4, 1, 0), TextSize = 12, LayoutOrder = i })
 end
 local grid = section(0, false)
 make("UIGridLayout", {
-	CellSize = UDim2.new(0.5, -5, 0, 192),
+	CellSize = UDim2.new(0.5, -5, 0, 216),
 	CellPadding = UDim2.fromOffset(10, 10),
 	SortOrder = Enum.SortOrder.LayoutOrder,
 }, grid)
-local empty = section(56, true)
+local empty = section(116, true)
+stroke(empty)
 local emptyText = text(
 	empty,
-	"No hay resultados. Prueba otra búsqueda.",
+	"Tu siguiente emote está por llegar.\nPrueba otra búsqueda.",
 	13,
 	C.muted,
 	{ TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center }
@@ -849,42 +1080,49 @@ local status = text(panel, "Listo · R15 recomendado", 11, C.muted, {
 	Size = UDim2.new(1, -32, 0, 34),
 	TextWrapped = true,
 })
-local mini = make("Frame", {
-	Name = "MiniPlayer",
-	Size = UDim2.fromOffset(286, 64),
-	BackgroundColor3 = C.background,
-	BorderSizePixel = 0,
-	Visible = false,
-	Active = true,
-}, safe)
-rounded(mini, 16)
-stroke(mini, C.accent)
-local miniOpen = button(
-	mini,
-	"",
-	{ Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -112, 0, 48), BackgroundTransparency = 1 }
-)
-text(miniOpen, "FE EMOTES  ↗", 10, C.accent, { Size = UDim2.new(1, 0, 0, 18) })
-local miniName = text(
-	miniOpen,
-	"Elige un emote",
-	12,
-	C.text,
-	{ Position = UDim2.fromOffset(0, 22), Size = UDim2.new(1, 0, 0, 20) }
-)
-local miniPause = button(mini, "Ⅱ", { Position = UDim2.new(1, -100, 0, 10), TextSize = 20 })
-local miniStop =
-	button(mini, "■", { Position = UDim2.new(1, -50, 0, 10), TextColor3 = C.error, TextSize = 20 })
 local launcher = button(safe, "FE", {
 	Name = "Reopen",
-	Size = UDim2.fromOffset(52, 52),
-	Position = UDim2.new(1, -64, 0, 18),
+	Size = UDim2.fromOffset(60, 60),
+	Position = UDim2.fromOffset(16, 18),
 	Visible = false,
-	BackgroundColor3 = C.purple,
-	TextSize = 18,
+	BackgroundColor3 = C.background,
+	TextSize = 21,
 	Font = Enum.Font.GothamBold,
 })
-stroke(launcher, C.accent)
+launcher:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(1, 0)
+local launcherRing = stroke(launcher, C.accent)
+launcherRing.Transparency = 0.15
+local launcherDot = make("Frame", {
+	Name = "PlaybackIndicator",
+	Size = UDim2.fromOffset(10, 10),
+	Position = UDim2.new(1, -12, 0, 2),
+	BackgroundColor3 = C.muted,
+	BorderSizePixel = 0,
+}, launcher)
+rounded(launcherDot, 5)
+text(launcher, "↗", 11, C.muted, {
+	Position = UDim2.fromOffset(22, 40),
+	Size = UDim2.fromOffset(16, 16),
+	TextXAlignment = Enum.TextXAlignment.Center,
+})
+local windowState = HubState.new()
+local favorites = Favorites.new(Validation, 120)
+local favoritesKey = "FEEmotesFavoritesV1"
+do
+	local saved = playerGui:GetAttribute(favoritesKey)
+	if type(saved) == "string" and #saved &lt; 100000 then
+		local ok, payload = pcall(function()
+			return HttpService:JSONDecode(saved)
+		end)
+		if ok then
+			favorites:restore(payload)
+		end
+	end
+end
+local selectedView = "Catálogo"
+local viewQueries = { ["Catálogo"] = "", Favoritos = "", Equipados = "" }
+local localSearchRevision = 0
+local lastIconDrag = -math.huge
 
 local state = { equipped = {}, speed = 1, locked = false, paused = false, loading = false }
 local items = table.clone(Config.Featured)
@@ -910,6 +1148,8 @@ end
 local function notify(message, isError)
 	status.Text = message
 	status.TextColor3 = isError and C.error or C.muted
+	status.TextTransparency = 0.45
+	tween(status, { TextTransparency = 0 }, 0.25)
 end
 local function isEquipped(id)
 	for _, item in ipairs(state.equipped) do
@@ -943,22 +1183,43 @@ end
 local function paintControls()
 	speedValue.Text = string.format("%.2f×", state.speed)
 	local ratio = (state.speed - Config.MinSpeed) / (Config.MaxSpeed - Config.MinSpeed)
-	fill.Size = UDim2.fromScale(ratio, 1)
-	knob.Position = UDim2.fromScale(ratio, 0.5)
+	if sliderInput then
+		fill.Size = UDim2.fromScale(ratio, 1)
+		knob.Position = UDim2.fromScale(ratio, 0.5)
+	else
+		tween(fill, { Size = UDim2.fromScale(ratio, 1) }, 0.12)
+		tween(knob, { Position = UDim2.fromScale(ratio, 0.5) }, 0.12)
+	end
 	lockTitle.Text = state.locked and "● Mantener: sí" or "○ Mantener: no"
 	pauseTitle.Text = state.paused and "▶ Reanudar pose" or "Ⅱ Pausar pose"
-	lockButton.BackgroundColor3 = state.locked and C.purple or C.elevated
-	pauseButton.BackgroundColor3 = state.paused and C.purple or C.elevated
-	miniPause.Text = state.paused and "▶" or "Ⅱ"
+	tween(lockButton, { BackgroundColor3 = state.locked and C.selected or C.elevated })
+	tween(pauseButton, { BackgroundColor3 = state.paused and C.selected or C.elevated })
+	lockTitle.TextColor3 = state.locked and C.background or C.text
+	pauseTitle.TextColor3 = state.paused and C.background or C.text
+	for _, label in ipairs(lockButton:GetChildren()) do
+		if label:IsA("TextLabel") and label ~= lockTitle then
+			label.TextColor3 = state.locked and C.elevated or C.muted
+		end
+	end
+	for _, label in ipairs(pauseButton:GetChildren()) do
+		if label:IsA("TextLabel") and label ~= pauseTitle then
+			label.TextColor3 = state.paused and C.elevated or C.muted
+		end
+	end
 	activeName.Text = state.active and state.active.Name or "Elige tu próximo emote"
 	activeImage.Image = state.active and thumbnail(state.active.Id) or ""
-	miniName.Text = state.active and state.active.Name or "Elige un emote"
 	activeState.Text = state.loading and "Cargando…"
 		or (
 			state.active and (state.paused and "POSE PAUSADA" or "REPRODUCIENDO")
 			or "UGC + clásicos de Roblox"
 		)
-	activeState.TextColor3 = state.active and C.green or C.muted
+	activeState.TextColor3 = state.active and C.text or C.muted
+	launcherDot.BackgroundColor3 = state.active and C.text or C.muted
+	launcherDot.Visible = state.active ~= nil
+	if not controlsOpen and state.active then
+		activeState.Text = (state.paused and "PAUSA" or string.format("%.2f×", state.speed))
+			.. (state.locked and " · FIJO" or " · EN BUCLE")
+	end
 end
 local function scheduleSettings()
 	settingsVersion = settingsVersion + 1
@@ -981,17 +1242,54 @@ local function setSpeed(value)
 	scheduleSettings()
 end
 
-local function renderCards()
+local function saveFavorites()
+	local ok = pcall(function()
+		playerGui:SetAttribute(favoritesKey, HttpService:JSONEncode(favorites:export()))
+	end)
+	if not ok then
+		notify("Favoritos disponibles en este panel; no se pudo guardar la copia de sesión.", true)
+	end
+end
+local renderCards
+local function toggleFavorite(item, favoriteButton)
+	local ok, result = favorites:toggle(item)
+	if not ok then
+		notify("Tu colección admite hasta 120 favoritos.", true)
+		return
+	end
+	saveFavorites()
+	notify(
+		result == "added" and "★ Guardado en Favoritos. Tu colección, a un toque."
+			or "Emote retirado de Favoritos."
+	)
+	if selectedView == "Favoritos" then
+		renderCards(false)
+	else
+		favoriteButton.Text = favorites:contains(item.Id) and "★" or "☆"
+		tween(favoriteButton, { TextColor3 = favorites:contains(item.Id) and C.text or C.muted })
+	end
+end
+renderCards = function(animate)
 	for _, card in ipairs(cards) do
 		card:Destroy()
 	end
 	cards = {}
-	local source = selectedTab == "Equipados" and state.equipped or items
+	local source = items
+	if selectedView == "Favoritos" then
+		source = favorites:list(searchBox.Text)
+	elseif selectedView == "Equipados" then
+		source = state.equipped
+	end
 	local count = 0
+	local query = searchBox.Text:lower():match("^%s*(.-)%s*$")
 	for _, item in ipairs(source) do
-		local matches = selectedTab ~= "Roblox" and selectedTab ~= "UGC"
+		local matches = selectedView ~= "Catálogo"
+			or selectedTab == "Todos"
 			or (selectedTab == "Roblox" and item.IsRoblox)
 			or (selectedTab == "UGC" and not item.IsRoblox)
+		if selectedView == "Equipados" and query ~= "" then
+			matches = item.Name:lower():find(query, 1, true) ~= nil or tostring(item.Id) == query
+		end
 		if matches then
 			count = count + 1
 			local card = make("Frame", {
@@ -1001,61 +1299,129 @@ local function renderCards()
 				LayoutOrder = count,
 				ClipsDescendants = true,
 			}, grid)
-			rounded(card)
-			stroke(card, state.active and state.active.Id == item.Id and C.accent or C.stroke)
+			rounded(card, 14)
+			local border = stroke(card, state.active and state.active.Id == item.Id and C.accent or C.stroke)
 			table.insert(cards, card)
+			card.Destroying:Connect(function()
+				for _, descendant in ipairs(card:GetDescendants()) do
+					if activeTweens[descendant] then
+						activeTweens[descendant]:Cancel()
+						activeTweens[descendant] = nil
+					end
+				end
+			end)
 			local image = make("ImageButton", {
-				Size = UDim2.new(1, -12, 0, 94),
+				Name = "Play",
+				Size = UDim2.new(1, -12, 0, 106),
 				Position = UDim2.fromOffset(6, 6),
 				BackgroundColor3 = C.elevated,
 				BorderSizePixel = 0,
 				Image = thumbnail(item.Id),
 				ScaleType = Enum.ScaleType.Fit,
-				AutoButtonColor = true,
+				AutoButtonColor = false,
 			}, card)
-			rounded(image, 8)
+			rounded(image, 10)
+			make(
+				"UIGradient",
+				{ Color = ColorSequence.new(C.text, Color3.fromRGB(110, 110, 116)), Rotation = 90 },
+				image
+			)
 			text(
 				image,
 				"▶",
-				18,
+				20,
 				C.text,
-				{ Position = UDim2.new(1, -24, 1, -26), Size = UDim2.fromOffset(24, 24) }
+				{ Position = UDim2.new(1, -28, 1, -28), Size = UDim2.fromOffset(24, 24) }
 			)
 			text(
 				card,
 				item.Name,
-				12,
+				13,
 				C.text,
-				{ Position = UDim2.fromOffset(10, 104), Size = UDim2.new(1, -20, 0, 20) }
+				{ Position = UDim2.fromOffset(10, 118), Size = UDim2.new(1, -20, 0, 22) }
 			)
-			text(card, item.IsRoblox and "ROBLOX · OFICIAL" or "UGC · " .. item.Creator, 9, C.accent, {
-				Position = UDim2.fromOffset(10, 126),
-				Size = UDim2.new(1, -20, 0, 14),
+			text(card, item.IsRoblox and "ROBLOX ORIGINAL" or "UGC · " .. item.Creator, 9, C.muted, {
+				Position = UDim2.fromOffset(10, 141),
+				Size = UDim2.new(1, -20, 0, 16),
 			})
-			local equip = button(card, isEquipped(item.Id) and "✓ Quitar" or "+ Equipar", {
-				Position = UDim2.fromOffset(6, 144),
-				Size = UDim2.new(1, -12, 0, 44),
-				TextSize = 12,
-				BackgroundColor3 = isEquipped(item.Id) and C.purple or C.elevated,
+			local equipped = isEquipped(item.Id)
+			local equip = button(card, equipped and "✓ Quitar" or "+ Equipar", {
+				Name = "Equip",
+				Position = UDim2.fromOffset(6, 166),
+				Size = UDim2.new(1, -62, 0, 44),
+				TextSize = 11,
+				BackgroundColor3 = equipped and C.selected or C.elevated,
+				TextColor3 = equipped and C.background or C.text,
 			})
-			-- Estas conexiones pertenecen a las tarjetas; Destroy las desconecta.
+			local favoriteButton = button(card, favorites:contains(item.Id) and "★" or "☆", {
+				Name = "Favorite",
+				Position = UDim2.new(1, -50, 0, 166),
+				Size = UDim2.fromOffset(44, 44),
+				TextSize = 23,
+				BackgroundColor3 = C.elevated,
+				TextColor3 = favorites:contains(item.Id) and C.text or C.muted,
+			})
+			image.MouseEnter:Connect(function()
+				tween(border, { Transparency = 0 }, 0.18)
+			end)
+			image.MouseLeave:Connect(function()
+				tween(border, { Transparency = 0.3 }, 0.18)
+			end)
 			image.Activated:Connect(function()
 				play(item.Id)
 			end)
 			equip.Activated:Connect(function()
 				request("Equip", item.Id)
 			end)
+			favoriteButton.Activated:Connect(function()
+				toggleFavorite(item, favoriteButton)
+			end)
+			-- Entrada breve de las primeras tarjetas; sin bucles permanentes por emote.
+			if animate and count &lt;= 8 then
+				local scale = make("UIScale", { Scale = 0.94 }, image)
+				image.ImageTransparency = 0.6
+				task.delay((count - 1) * 0.025, function()
+					if destroyed or not image.Parent then
+						return
+					end
+					tween(scale, { Scale = 1 }, 0.3, Enum.EasingStyle.Back)
+					tween(image, { ImageTransparency = 0 }, 0.3)
+				end)
+			end
 		end
 	end
 	empty.Visible = count == 0
-	emptyText.Text = selectedTab == "Equipados" and "Toca + Equipar para guardar hasta 8 accesos rápidos."
-		or "No hay resultados en estas páginas. Busca o carga más."
-	grid.Visible = count &gt; 0
-	grid.Size = UDim2.new(1, 0, 0, math.ceil(count / 2) * 202 - (count &gt; 0 and 10 or 0))
-	for name, tab in pairs(tabs) do
-		tween(tab, { BackgroundColor3 = name == selectedTab and C.purple or C.surface })
+	if selectedView == "Favoritos" then
+		emptyText.Text = favorites:count() == 0
+				and "☆  Tu colección empieza aquí.\nMarca la estrella de cualquier emote para guardarlo."
+			or "No hay favoritos con ese nombre.\nPrueba otro nombre, creador o ID."
+	elseif selectedView == "Equipados" then
+		emptyText.Text = "Tus emotes, siempre a mano.\nToca + Equipar en el catálogo para añadirlos."
+	else
+		emptyText.Text = "No hay coincidencias en estas páginas.\nPrueba otra búsqueda o carga más emotes."
 	end
-	moreSection.Visible = selectedTab ~= "Equipados"
+	grid.Visible = count &gt; 0
+	grid.Size = UDim2.new(1, 0, 0, math.ceil(count / 2) * 226 - (count &gt; 0 and 10 or 0))
+	collectionCount.Text = string.format("%02d", count)
+	collectionEyebrow.Text = selectedView == "Favoritos" and "TU COLECCIÓN PERSONAL"
+		or (selectedView == "Equipados" and "LISTOS PARA REPRODUCIR" or "LA BIBLIOTECA")
+	collectionTitle.Text = selectedView == "Favoritos" and "Solo tus favoritos."
+		or (selectedView == "Equipados" and "Tu selección rápida." or "Encuentra tu ritmo.")
+	collectionHint.Text = selectedView == "Favoritos"
+			and (tostring(favorites:count()) .. " / 120 guardados · ★ para quitar")
+		or (
+			selectedView == "Equipados" and "Hasta 8 accesos rápidos. Sin perder tu ritmo."
+			or "Toca ▶ para bailar o ☆ para guardar."
+		)
+	quick.Visible = #state.equipped &gt; 0
+	for name, tab in pairs(tabs) do
+		tween(tab, {
+			BackgroundColor3 = name == selectedTab and C.selected or C.surface,
+			TextColor3 = name == selectedTab and C.background or C.muted,
+		})
+	end
+	tabsSection.Visible = selectedView == "Catálogo"
+	moreSection.Visible = selectedView == "Catálogo"
 end
 
 local function renderSlots()
@@ -1112,6 +1478,10 @@ local function normalize(result)
 	}
 end
 local function searchCatalog(nextPage)
+	if selectedView ~= "Catálogo" then
+		renderCards(true)
+		return
+	end
 	if searching or os.clock() - lastSearch &lt; 1 then
 		return
 	end
@@ -1175,6 +1545,9 @@ local function searchCatalog(nextPage)
 			seen[item.Id] = true
 		end
 		for _, result in ipairs(pages:GetCurrentPage()) do
+			if #items &gt;= 120 then
+				break
+			end
 			local item = normalize(result)
 			if item and not seen[item.Id] then
 				table.insert(items, item)
@@ -1188,10 +1561,7 @@ local function searchCatalog(nextPage)
 		if capped then
 			catalogPages = nil
 		end
-		if selectedTab == "Equipados" then
-			selectedTab = "Todos"
-		end
-		renderCards()
+		renderCards(selectedView == "Catálogo")
 		notify(tostring(#items) .. " emotes cargados · toca una imagen para reproducir")
 	end)
 end
@@ -1199,8 +1569,8 @@ end
 local function clampPosition(object, x, y)
 	local size = safe.AbsoluteSize
 	object.Position = UDim2.fromOffset(
-		math.clamp(x, 8, math.max(8, size.X - object.AbsoluteSize.X - 8)),
-		math.clamp(y, 8, math.max(8, size.Y - object.AbsoluteSize.Y - 8))
+		math.clamp(x, 8, math.max(8, size.X - object.Size.X.Offset - 8)),
+		math.clamp(y, 8, math.max(8, size.Y - object.Size.Y.Offset - 8))
 	)
 end
 local positioned = false
@@ -1210,14 +1580,13 @@ local function resize()
 		return
 	end
 	panel.Size = UDim2.fromOffset(math.min(440, size.X - 16), math.min(740, size.Y - 16))
-	mini.Size = UDim2.fromOffset(math.min(286, size.X - 16), 64)
 	if not positioned then
-		clampPosition(panel, size.X - panel.AbsoluteSize.X - 16, (size.Y - panel.AbsoluteSize.Y) / 2)
-		clampPosition(mini, size.X - mini.AbsoluteSize.X - 16, 18)
+		clampPosition(panel, size.X - panel.Size.X.Offset - 16, (size.Y - panel.Size.Y.Offset) / 2)
+		clampPosition(launcher, size.X - 76, 18)
 		positioned = true
 	else
 		clampPosition(panel, panel.Position.X.Offset, panel.Position.Y.Offset)
-		clampPosition(mini, mini.Position.X.Offset, mini.Position.Y.Offset)
+		clampPosition(launcher, launcher.Position.X.Offset, launcher.Position.Y.Offset)
 	end
 end
 -- Un solo gesto activo: arrastrar la ventana no secuestra el joystick ni otros dedos.
@@ -1270,6 +1639,9 @@ connect(UserInputService.InputChanged, function(input)
 		)
 	then
 		local delta = input.Position - drag.origin
+		if delta.Magnitude &gt; 6 then
+			drag.moved = true
+		end
 		clampPosition(drag.target, drag.position.X.Offset + delta.X, drag.position.Y.Offset + delta.Y)
 	end
 end)
@@ -1279,35 +1651,90 @@ connect(UserInputService.InputEnded, function(input)
 		body.ScrollingEnabled = true
 	end
 	if drag and input == drag.input then
+		if drag.target == launcher and drag.moved then
+			lastIconDrag = os.clock()
+		end
 		drag = nil
 	end
 end)
 draggable(header, panel)
-draggable(mini, mini)
+draggable(launcher, launcher)
 connect(safe:GetPropertyChangedSignal("AbsoluteSize"), resize)
 
 local function showPanel()
+	local ticket = windowState:set("open")
+	if not ticket then
+		return
+	end
 	closed = false
-	panel.Visible, mini.Visible, launcher.Visible = true, false, false
+	launcher.Visible = false
+	panel.Visible = true
+	panelScale.Scale = 1
 	resize()
+	panelScale.Scale = 0.96
+	tween(panelScale, { Scale = 1 }, 0.32, Enum.EasingStyle.Back)
+	tween(panel, { GroupTransparency = 0 }, 0.22)
+end
+local function hidePanel(mode)
+	local ticket = windowState:set(mode)
+	if not ticket then
+		return
+	end
+	closed = mode == "closed"
+	if searchBox:IsFocused() then
+		searchBox:ReleaseFocus(false)
+	end
+	if closed then
+		request("Stop")
+	end
+	sliderInput = nil
+	body.ScrollingEnabled = true
+	drag = nil
+	launcher.Visible = true
+	local iconScale = launcher:FindFirstChildOfClass("UIScale")
+	iconScale.Scale = 0.75
+	tween(iconScale, { Scale = 1 }, 0.32, Enum.EasingStyle.Back)
+	tween(panelScale, { Scale = 0.96 }, 0.2)
+	tween(panel, { GroupTransparency = 1 }, 0.2)
+	task.delay(0.21, function()
+		if not destroyed and windowState:current(ticket) then
+			panel.Visible = false
+		end
+	end)
+	if not closed then
+		notify("Minimizado · toca el icono FE para volver. Tu emote continúa.")
+	end
 end
 connect(minimize.Activated, function()
-	panel.Visible, mini.Visible, launcher.Visible = false, true, false
-	notify("Minimizado. Tu emote continúa.")
+	hidePanel("minimized")
 end)
 connect(close.Activated, function()
-	closed = true
-	request("Stop")
-	panel.Visible, mini.Visible, launcher.Visible = false, false, true
+	hidePanel("closed")
 end)
-connect(miniOpen.Activated, showPanel)
-connect(launcher.Activated, showPanel)
+connect(launcher.Activated, function()
+	if (drag and drag.target == launcher and drag.moved) or os.clock() - lastIconDrag &lt; 0.2 then
+		return
+	end
+	showPanel()
+end)
 connect(stopButton.Activated, function()
 	request("Stop")
 end)
-connect(miniStop.Activated, function()
-	request("Stop")
+connect(controlsToggle.Activated, function()
+	controlsOpen = not controlsOpen
+	controlsRevision = controlsRevision + 1
+	local ticket = controlsRevision
+	controlsGroup.Visible = true
+	controlsToggle.Text = controlsOpen and "⌃" or "≡"
+	tween(controlsGroup, { Size = UDim2.new(1, 0, 0, controlsOpen and 128 or 0) }, 0.24)
+	task.delay(0.25, function()
+		if not destroyed and ticket == controlsRevision and not controlsOpen then
+			controlsGroup.Visible = false
+		end
+	end)
+	paintControls()
 end)
+
 connect(minus.Activated, function()
 	setSpeed(state.speed - Config.SpeedStep)
 end)
@@ -1323,7 +1750,6 @@ local function togglePause()
 	scheduleSettings()
 end
 connect(pauseButton.Activated, togglePause)
-connect(miniPause.Activated, togglePause)
 connect(searchButton.Activated, function()
 	searchCatalog(false)
 end)
@@ -1338,9 +1764,43 @@ end)
 for name, tab in pairs(tabs) do
 	connect(tab.Activated, function()
 		selectedTab = name
-		renderCards()
+		renderCards(true)
 	end)
 end
+local function selectView(name)
+	viewQueries[selectedView] = searchBox.Text
+	selectedView = name
+	searchBox.Text = viewQueries[name]
+	searchBox.PlaceholderText = name == "Catálogo" and "Buscar nombre, ID o enlace…"
+		or "Filtrar tu colección…"
+	for i, key in ipairs({ "Catálogo", "Favoritos", "Equipados" }) do
+		if key == name then
+			tween(navIndicator, { Position = UDim2.new((i - 1) / 3, 4, 0, 4) }, 0.25)
+		end
+		tween(viewButtons[key], { TextColor3 = key == name and C.background or C.muted })
+	end
+	body.CanvasPosition = Vector2.new(0, 0)
+	pageSurface.GroupTransparency = 0.45
+	tween(pageSurface, { GroupTransparency = 0 }, 0.25)
+	renderCards(true)
+end
+for name, viewButton in pairs(viewButtons) do
+	connect(viewButton.Activated, function()
+		selectView(name)
+	end)
+end
+connect(searchBox:GetPropertyChangedSignal("Text"), function()
+	localSearchRevision = localSearchRevision + 1
+	local ticket = localSearchRevision
+	if selectedView == "Catálogo" then
+		return
+	end
+	task.delay(0.12, function()
+		if not destroyed and ticket == localSearchRevision and selectedView ~= "Catálogo" then
+			renderCards(false)
+		end
+	end)
+end)
 connect(remote.OnClientEvent, function(snapshot)
 	if destroyed then
 		return
@@ -1380,8 +1840,8 @@ connect(remote.OnClientEvent, function(snapshot)
 end)
 connect(UserInputService.InputBegan, function(input, processed)
 	if not processed and not UserInputService:GetFocusedTextBox() and input.KeyCode == Enum.KeyCode.M then
-		if panel.Visible then
-			panel.Visible, mini.Visible = false, true
+		if windowState.mode == "open" then
+			hidePanel("minimized")
 		else
 			showPanel()
 		end
@@ -1397,6 +1857,11 @@ connect(player.CharacterAdded, function()
 end)
 connect(gui.Destroying, function()
 	destroyed = true
+	windowState:destroy()
+	for object, animation in pairs(activeTweens) do
+		animation:Cancel()
+		activeTweens[object] = nil
+	end
 	searchRevision = searchRevision + 1
 	request("Stop")
 	for _, connection in ipairs(connections) do
@@ -1406,9 +1871,13 @@ end)
 
 slotsSignature = "initial"
 renderSlots()
-renderCards()
+renderCards(true)
 paintControls()
-task.defer(resize)
+task.defer(function()
+	if not destroyed then
+		showPanel()
+	end
+end)
 request("Sync")
 
 task.defer(function()

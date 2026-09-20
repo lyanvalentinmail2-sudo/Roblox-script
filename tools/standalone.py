@@ -31,12 +31,14 @@ def build():
                         'if previousGui then previousGui:Destroy() end')
     head += inline("Config", "src/ReplicatedStorage/FEEmotes/Config.lua")
     head += inline("Validation", "src/ReplicatedStorage/FEEmotes/Validation.lua")
+    head += inline("Favorites", "src/ReplicatedStorage/FEEmotes/Favorites.lua")
+    head += inline("HubState", "src/ReplicatedStorage/FEEmotes/HubState.lua")
     head += inline("createController", "src/Standalone/Controller.lua")
     head += "local remote = createController(player, Config, Validation)\n\n"
     body = "local C = {" + body
     body = replace_once(body, 'Name = "FEEmotesGui"', 'Name = "FEEmotesStandaloneGui"')
     body = body.replace('remote:FireServer(', 'remote:Dispatch(').replace('remote.OnClientEvent', 'remote.Changed')
-    body = replace_once(body, '"TU AVATAR. TU RITMO."', '"MODO LOCAL · R15"')
+    body = replace_once(body, '"NOIR EDITION  /  TU RITMO"', '"NOIR EDITION  /  LOCAL · R15"')
     body = replace_once(body, '"Listo · R15 recomendado"', '"Modo local · visibilidad a otros no garantizada"')
     body = replace_once(body, 'connect(gui.Destroying, function()\n', 'connect(gui.Destroying, function()\n\tremote:Destroy()\n')
     preamble = """-- FE EMOTES · ARCHIVO ÚNICO / EJECUCIÓN LOCAL

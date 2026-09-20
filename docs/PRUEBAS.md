@@ -42,8 +42,10 @@ En Device Emulator, probar 360×640, 390×844, tablet y teléfono en horizontal;
 - [ ] Miniaturas, etiquetas, estado de reproducción y mensajes de error legibles.
 - [ ] Slider con un dedo; joystick con otro. Soltar fuera del slider recupera el desplazamiento.
 - [ ] Arrastrar la cabecera a cada borde; la ventana queda dentro de la zona segura.
-- [ ] Girar la pantalla con el panel abierto y minimizado: queda dentro de pantalla.
-- [ ] Minimizar conserva el emote; minirreproductor permite pausar, detener y restaurar.
+- [ ] Girar la pantalla con el panel abierto y el icono minimizado: queda dentro de pantalla.
+- [ ] Minimizar conserva el emote y muestra el icono circular FE. Tocarlo restaura el panel; arrastrarlo no lo abre.
+- [ ] Abrir controles con ≡ y plegarlos repetidamente: no desaparecen por un callback anterior.
+- [ ] Minimizar/abrir/cerrar rápidamente: ningún tween tardío oculta la ventana reabierta.
 - [ ] Cerrar detiene el emote y deja el botón FE para reabrir; no interfiere con el teclado.
 - [ ] Pulsar M en PC; escribir M en el buscador no minimiza el panel.
 - [ ] Mantener pulsados/repetir controles y cambiar velocidad no duplica la GUI ni acumula pistas.
@@ -56,3 +58,18 @@ En Device Emulator, probar 360×640, 390×844, tablet y teléfono en horizontal;
 - [ ] Confirmar que los contenedores de InsertService nunca se parentan al mundo.
 - [ ] Probar con el sistema de combate/animaciones real del juego; animaciones de prioridad superior pueden sustituir visualmente los emotes.
 - [ ] Salir y volver a entrar: los accesos se reinician (sin DataStore, comportamiento documentado).
+
+## NOIR: favoritos y animaciones (verificación real pendiente)
+
+- [ ] Marcar ☆ en una tarjeta; Favoritos muestra la misma miniatura y nombre. ★ lo retira sin quitarlo del catálogo ni de Equipados.
+- [ ] Guardar favoritos UGC/oficiales, navegar otras páginas y cambiar búsquedas: la colección permanece.
+- [ ] Buscar por nombre, creador e ID en Favoritos. Vaciar el buscador devuelve toda la colección.
+- [ ] Completar 120 favoritos: mensaje de límite, sin bloquear ni perder los ya guardados.
+- [ ] Reaparecer y volver a ejecutar el archivo de Delta: los favoritos permanecen durante la sesión; los equipados se reinician al ejecutar de nuevo.
+- [ ] Recibir resultados de catálogo mientras Favoritos está abierto: la pestaña no cambia sola.
+- [ ] Favoritos vacíos y búsqueda sin resultados: mensaje correspondiente, sin tarjetas huérfanas.
+- [ ] Todos los fondos principales son negros/grafito; pestañas y botones seleccionados tienen contraste adecuado.
+- [ ] Transiciones de entrada/salida, indicador de navegación, estrellas, tarjetas y controles fluidas en teléfono físico.
+- [ ] Abrir/cerrar 30 veces, cambiar pestañas y recrear GUI: sin conexiones, tweens o pistas acumulándose.
+- [ ] Arrastrar el icono a las cuatro esquinas y girar el teléfono: siempre se puede volver a tocar.
+- [ ] Al cerrar o minimizar con el teclado abierto, se cierra el teclado y se puede recuperar el hub.
